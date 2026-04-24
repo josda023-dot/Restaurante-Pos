@@ -640,12 +640,13 @@ function closeEfModal(){const m=document.getElementById("efModal");if(m)m.remove
 function calcVueltoDesglose(v){const res=[];let rem=v;for(const d of DENOMINACIONES){const cnt=Math.floor(rem/d.val);if(cnt>0){res.push({val:d.val,cnt});rem-=d.val*cnt;}if(rem<=0)break;}return res;}
 
 function confirmarPago(cobradoPor){
-  const ord=orders[activeMesa];const{sub,descMonto,subDesc,tax,total}=getTotal();
+  const ord=orders[activeMesa];const{sub,descMonto,subDesc,servMonto,tax,total}=getTotal();
   const recibido=payMethod==="Efectivo"?totalBilletes():total;
   const vuelto=Math.max(0,recibido-total);
   const vueltoDesg=payMethod==="Efectivo"&&vuelto>0?calcVueltoDesglose(vuelto):[];
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:[...ord.items],metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
+  const itemsConEmoji=ord.items.map(i=>({...i,emoji:menu.find(m=>m.id===i.id)?.emoji||'\uD83C\uDF7D'}));
+  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:itemsConEmoji,metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
   if(payMethod==="Efectivo"){for(const[v,c]of Object.entries(efBilletes))cajaBilletes[v]=(cajaBilletes[v]||0)+c;for(const vd of vueltoDesg)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
   const ventaGuardada=ventas[ventas.length-1];
   orders[activeMesa]={items:[]};saveLS();closeEfModal();closeMesa();
@@ -680,7 +681,12 @@ function getSA(iid,gid){return splitAssignment[iid+'-'+gid]||0;}
 function setSA(iid,gid,qty){const k=iid+'-'+gid;if(qty<=0)delete splitAssignment[k];else splitAssignment[k]=qty;}
 function getItemAssigned(item){return splitGroups.reduce((a,g)=>a+getSA(item.id,g.id),0);}
 function getGroupSubtotal(gid){return orders[activeMesa].items.reduce((a,item)=>a+getSA(item.id,gid)*item.price,0);}
-function getGroupTotal(gid){return Math.round(getGroupSubtotal(gid)*1.13);}
+function getGroupTotal(gid){
+  const sub=getGroupSubtotal(gid);
+  const serv=cobraServicio?Math.round(sub*0.10):0;
+  const tax=cobraItbis?Math.round((sub+serv)*0.13):0;
+  return Math.round(sub+serv+tax);
+}
 function splitReady(){
   if(!splitGroups.length||!splitGroups.every(g=>g.method))return false;
   return orders[activeMesa].items.every(item=>getItemAssigned(item)===item.qty);
@@ -713,7 +719,9 @@ function showSplitModal(){
     const assigned=getItemAssigned(item);
     const remaining=item.qty-assigned;
     const done=remaining===0;
-    const priceWithTax=Math.round(item.price*item.qty*1.13);
+    const serv=cobraServicio?Math.round(item.price*item.qty*0.10):0;
+    const itbis=cobraItbis?Math.round((item.price*item.qty+serv)*0.13):0;
+    const priceWithTax=item.price*item.qty+serv+itbis;
     const controls=splitGroups.map((g,gi)=>{
       const bg=GRP_BG[gi%5],bd=GRP_BD[gi%5],tc=GRP_TC[gi%5];
       const qty=getSA(item.id,g.id);
@@ -739,7 +747,10 @@ function showSplitModal(){
 
   const subSinImpuesto=ord.items.reduce((a,i)=>a+i.price*i.qty,0);
   const asignadoSub=splitGroups.reduce((a,g)=>a+getGroupSubtotal(g.id),0);
-  const sinAsignar=Math.round((subSinImpuesto-asignadoSub)*1.13);
+  const diffSub=subSinImpuesto-asignadoSub;
+  const diffServ=cobraServicio?Math.round(diffSub*0.10):0;
+  const diffTax=cobraItbis?Math.round((diffSub+diffServ)*0.13):0;
+  const sinAsignar=Math.round(diffSub+diffServ+diffTax);
   const ready=splitReady();
 
   const div=document.createElement("div");div.className="overlay-bg";div.id="splitModal";div.style.zIndex="150";
@@ -785,10 +796,11 @@ function adjustIG(iid,gid,delta){
 }
 function iniciarCobroSplit(){showPinCobro(cp=>confirmarPagoSplit(cp));}
 function confirmarPagoSplit(cobradoPor){
-  const ord=orders[activeMesa];const{sub,tax,total}=getTotal();
+  const ord=orders[activeMesa];const{sub,descMonto,servMonto,tax,total}=getTotal();
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
   const pagos=splitGroups.map(g=>({name:g.name,method:g.method,amount:getGroupTotal(g.id)}));
-  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
+  const itemsConEmoji=ord.items.map(i=>({...i,emoji:menu.find(m=>m.id===i.id)?.emoji||'\uD83C\uDF7D'}));
+  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:itemsConEmoji,metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
   orders[activeMesa]={items:[]};
   splitGroups=[];splitAssignment={};
   const ventaGuardada=ventas[ventas.length-1];
@@ -1107,8 +1119,8 @@ function buildTicketHTML(v){
   // Totals
   h+=row('Subtotal:',fmt(v.sub));
   if(v.descMonto>0)h+=`<div class="ticket-row" style="color:#c0392b"><span>Descuento:</span><span>&minus; ${fmt(v.descMonto)}</span></div>`;
-  h+=row('Servicio 10%:',v.servMonto>0?fmt(v.servMonto):fmt(0));
-  h+=row('ITBIS 13%:',v.tax>0?fmt(v.tax):fmt(0));
+  if(v.servMonto>0)h+=row('Servicio 10%:',fmt(v.servMonto));
+  if(v.tax>0)h+=row('ITBIS 13%:',fmt(v.tax));
   h+=hr('solid');
   h+=row('<strong>TOTAL:</strong>',`<strong>${fmt(v.total)}</strong>`,'ticket-bold');
   h+=hr('solid');
@@ -1133,8 +1145,8 @@ function buildTicketHTML(v){
 function showTicket(v){
   const old=document.getElementById("ticketOverlay");if(old)old.remove();
   const div=document.createElement("div");div.className="ticket-overlay";div.id="ticketOverlay";
-  div.setAttribute('id','ticketPrintRoot');
-  div.innerHTML=`<div class="ticket-wrap">
+  div.setAttribute('id','ticketOverlay');
+  div.innerHTML=`<div class="ticket-wrap" id="ticketPrintRoot">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px" class="ticket-no-print">
       <div style="font-size:14px;font-weight:600;color:#111">&#128220; Tiquete de venta</div>
       <span style="font-size:12px;color:#aaa">${v.mesa}</span>
@@ -1147,10 +1159,11 @@ function showTicket(v){
   </div>`;
   document.body.appendChild(div);
 }
-function cerrarTicket(){const m=document.getElementById("ticketPrintRoot");if(m)m.remove();renderSalon();}
+function cerrarTicket(){const m=document.getElementById("ticketOverlay");if(m)m.remove();renderSalon();}
 function printTicket(){
   const content=document.getElementById("ticketPrintArea");if(!content)return;
   const w=window.open('','_blank','width=420,height=650');
+  if(!w)return;
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tiquete</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
