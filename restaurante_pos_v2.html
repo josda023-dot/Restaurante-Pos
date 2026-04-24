@@ -497,7 +497,7 @@ function renderMesaModal(){
   const old=document.getElementById("mesaModal");if(old)old.remove();
   const availCats=[...new Set(menu.map(i=>i.cat))].filter(c=>cats.includes(c));
   if(!availCats.includes(activeCat))activeCat=availCats[0]||cats[0];
-  const ord=orders[activeMesa];const{sub,descMonto,tax,total}=getTotal();
+  const ord=orders[activeMesa];const{sub,descMonto,servMonto,tax,total}=getTotal();
   const div=document.createElement("div");div.className="overlay-bg";div.id="mesaModal";
   const catTabs=availCats.map(c=>`<button class="ctab${c===activeCat?" active":""}" onclick="setMesaCat('${c.replace(/'/g,"\\'")}');">${c}</button>`).join("");
   const items=menu.filter(i=>i.cat===activeCat).map(i=>`<div class="mi" onclick="addToOrder(${i.id})"><div class="mi-em">${i.emoji}</div><div class="mi-nm">${i.name}</div><div class="mi-pr">${fmt(i.price)}</div></div>`).join("")||`<div class="empty">Sin platillos</div>`;
