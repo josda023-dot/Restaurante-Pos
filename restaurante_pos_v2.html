@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mi Restaurante — POS</title>
+<title>Soda El Tucan — POS</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
 body{background:#f5f5f0;min-height:100vh}
@@ -192,7 +192,7 @@ body{background:#f5f5f0;min-height:100vh}
 
 <div id="app">
 <div class="topnav">
-  <h1>&#127869; Mi Restaurante</h1>
+  <h1>&#127799; Soda El Tucan</h1>
   <button class="navbtn active" onclick="goScreen('salon')" id="nav-salon">Salon</button>
   <button class="navbtn" onclick="goScreen('ventas')" id="nav-ventas">Ventas del dia</button>
   <button class="navbtn" onclick="goScreen('gastos')" id="nav-gastos">Gastos</button>
@@ -339,6 +339,18 @@ body{background:#f5f5f0;min-height:100vh}
 
 <script>
 const ALL_SCREENS=["salon","ventas","gastos","cierre","menu-admin","usuarios"];
+
+/* ── FIREBASE + TABLET MODE ── */
+const TABLET_MODE=new URLSearchParams(window.location.search).get('tablet')==='1';
+const FB_CONFIG={apiKey:"AIzaSyAW4J1KkZMdKfiJVka7s3PjymoyyykfINI",authDomain:"pos-tucan.firebaseapp.com",databaseURL:"https://pos-tucan-default-rtdb.firebaseio.com",projectId:"pos-tucan",storageBucket:"pos-tucan.firebasestorage.app",messagingSenderId:"271965578160",appId:"1:271965578160:web:5577bfe487ed2bf208ac75"};
+firebase.initializeApp(FB_CONFIG);
+const fbOrders=firebase.database().ref('pos_orders');
+fbOrders.on('value',snap=>{
+  const d=snap.val()||{};
+  Object.keys(d).forEach(m=>{if(d[m]&&Array.isArray(d[m].items))orders[m]=d[m];});
+  renderSalon();
+  if(activeMesa&&document.getElementById('mesaModal'))renderMesaModal();
+});
 const SCREEN_LABELS={salon:"Salon",ventas:"Ventas",gastos:"Gastos",cierre:"Cierre","menu-admin":"Menu",usuarios:"Usuarios"};
 const DENOMINACIONES=[
   {val:50000,lbl:"Billete"},{val:20000,lbl:"Billete"},{val:10000,lbl:"Billete"},
@@ -348,25 +360,181 @@ const DENOMINACIONES=[
 ];
 const GASTO_TIPOS={caja:{lbl:"Efectivo caja",cls:"bg-ef",btnCls:"caja"},fuerte:{lbl:"Caja fuerte",cls:"bg-cf",btnCls:"fuerte"},sinpe:{lbl:"SINPE",cls:"bg-si",btnCls:"sinpe"},transf:{lbl:"Transferencia",cls:"bg-tr",btnCls:"transf"}};
 
-let cats=["Entradas","Platos fuertes","Bebidas","Postres","Extras"];
+let cats=["Almuerzos","Especiales","Sopas","Gallos","Pastas","Bebidas","Desayunos","Antojitos","+Proteínas","+Acomp.","+Salsas","+Snacks","+Bebidas Ad.","+Varios"];
 let menu=[
-  {id:1,name:"Nachos con queso",price:3500,cat:"Entradas",emoji:"\uD83E\uDDC0"},
-  {id:2,name:"Alitas BBQ",price:4200,cat:"Entradas",emoji:"\uD83C\uDF57"},
-  {id:3,name:"Sopa del dia",price:2800,cat:"Entradas",emoji:"\uD83C\uDF72"},
-  {id:4,name:"Pechuga a la plancha",price:5800,cat:"Platos fuertes",emoji:"\uD83C\uDF7D"},
-  {id:5,name:"Filete de res",price:8500,cat:"Platos fuertes",emoji:"\uD83E\uDD69"},
-  {id:6,name:"Pasta marinara",price:5200,cat:"Platos fuertes",emoji:"\uD83C\uDF5D"},
-  {id:7,name:"Casado de pollo",price:4800,cat:"Platos fuertes",emoji:"\uD83C\uDF5B"},
-  {id:8,name:"Agua natural",price:800,cat:"Bebidas",emoji:"\uD83D\uDCA7"},
-  {id:9,name:"Refresco natural",price:1200,cat:"Bebidas",emoji:"\uD83E\uDD64"},
-  {id:10,name:"Cerveza",price:1800,cat:"Bebidas",emoji:"\uD83C\uDF7A"},
-  {id:11,name:"Cafe",price:900,cat:"Bebidas",emoji:"\u2615"},
-  {id:12,name:"Flan de caramelo",price:1500,cat:"Postres",emoji:"\uD83C\uDF6E"},
-  {id:13,name:"Tres leches",price:1800,cat:"Postres",emoji:"\uD83C\uDF70"},
-  {id:14,name:"Arroz extra",price:600,cat:"Extras",emoji:"\uD83C\uDF5A"},
-  {id:15,name:"Tortillas",price:400,cat:"Extras",emoji:"\uD83E\uDEB3"},
+  /* ALMUERZOS */
+  {id:1,name:"Casado con Proteína",price:4500,cat:"Almuerzos",emoji:"\uD83C\uDF7D"},
+  {id:2,name:"Casado con Lengua en Salsa",price:5500,cat:"Almuerzos",emoji:"\uD83C\uDF7D"},
+  /* ESPECIALES */
+  {id:3,name:"Arroz con Pollo",price:5000,cat:"Especiales",emoji:"\uD83C\uDF5A"},
+  {id:4,name:"Arroz Cantonés",price:5000,cat:"Especiales",emoji:"\uD83C\uDF5A"},
+  {id:5,name:"Arroz con Cerdo",price:5000,cat:"Especiales",emoji:"\uD83C\uDF5A"},
+  {id:6,name:"Arroz con Camarones",price:5500,cat:"Especiales",emoji:"\uD83E\uDD90"},
+  {id:7,name:"Camarones con Arroz",price:7500,cat:"Especiales",emoji:"\uD83E\uDD90"},
+  {id:8,name:"Fajitas de Pollo o Res",price:4800,cat:"Especiales",emoji:"\uD83C\uDF2E"},
+  {id:9,name:"Fajitas Mixtas",price:5000,cat:"Especiales",emoji:"\uD83C\uDF2E"},
+  {id:10,name:"Filete de Pescado",price:5000,cat:"Especiales",emoji:"\uD83D\uDC1F"},
+  {id:11,name:"Filete de Pollo",price:4800,cat:"Especiales",emoji:"\uD83C\uDF57"},
+  {id:12,name:"Costilla de Cerdo",price:5500,cat:"Especiales",emoji:"\uD83E\uDD69"},
+  {id:13,name:"Chifrijo",price:5000,cat:"Especiales",emoji:"\uD83E\uDED8"},
+  /* SOPAS */
+  {id:14,name:"Sopa Negra",price:3500,cat:"Sopas",emoji:"\uD83C\uDF72"},
+  {id:15,name:"Consomé de Pollo",price:3500,cat:"Sopas",emoji:"\uD83C\uDF72"},
+  /* GALLOS */
+  {id:16,name:"Gallo con Torta de Huevo",price:2500,cat:"Gallos",emoji:"\uD83E\uDD5A"},
+  {id:17,name:"Gallo con Salchichón o Chorizo",price:2500,cat:"Gallos",emoji:"\uD83C\uDF2D"},
+  {id:18,name:"Gallo con Carne, Pollo o Mondongo",price:3000,cat:"Gallos",emoji:"\uD83C\uDF2E"},
+  {id:19,name:"Gallo con Queso",price:2500,cat:"Gallos",emoji:"\uD83E\uDDC0"},
+  {id:20,name:"Tortilla con Natilla",price:2500,cat:"Gallos",emoji:"\uD83E\uDEE3"},
+  {id:21,name:"Tortilla Aliñada",price:3000,cat:"Gallos",emoji:"\uD83E\uDEE3"},
+  {id:22,name:"Gallo con Lengua en Salsa",price:4000,cat:"Gallos",emoji:"\uD83C\uDF2E"},
+  /* PASTAS */
+  {id:23,name:"Espagueti Bolognesa",price:5000,cat:"Pastas",emoji:"\uD83C\uDF5D"},
+  {id:24,name:"Espagueti Carbonara",price:5000,cat:"Pastas",emoji:"\uD83C\uDF5D"},
+  {id:25,name:"Espagueti con Camarones",price:6000,cat:"Pastas",emoji:"\uD83C\uDF5D"},
+  /* BEBIDAS */
+  {id:26,name:"Café Negro",price:1200,cat:"Bebidas",emoji:"\u2615"},
+  {id:27,name:"Café con Leche",price:1300,cat:"Bebidas",emoji:"\u2615"},
+  {id:28,name:"Gaseosa de Vidrio",price:1000,cat:"Bebidas",emoji:"\uD83C\uDF7E"},
+  {id:29,name:"Fresco Natural",price:1000,cat:"Bebidas",emoji:"\uD83E\uDD64"},
+  {id:30,name:"Gaseosa Desechable",price:1200,cat:"Bebidas",emoji:"\uD83E\uDDE3"},
+  {id:31,name:"Batido (Chocolate/Crema/Horchata)",price:2000,cat:"Bebidas",emoji:"\uD83E\uDD64"},
+  /* DESAYUNOS */
+  {id:32,name:"Pinto con Huevo",price:3300,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:33,name:"Pinto con Natilla",price:3300,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:34,name:"Pinto con Chorizo",price:3500,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:35,name:"Pinto con Queso",price:3500,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:36,name:"Pinto con Huevos con Tomate",price:3800,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:37,name:"Pinto con Huevos con Jamón",price:3800,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:38,name:"Pinto con Huevos con Tosineta",price:3800,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:39,name:"Pinto con Hígado",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:40,name:"Pinto con Mondongo",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:41,name:"Pinto con Carne en Salsa",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:42,name:"Pinto con Pollo en Salsa",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:43,name:"Pinto con Carne Desmechada",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:44,name:"Pinto con Chuleta o Bistec",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:45,name:"Pinto con Omelette",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:46,name:"Pinto con Huevos Rancheros",price:4000,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:47,name:"Pinto con Lengua en Salsa",price:4500,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  /* ANTOJITOS */
+  {id:48,name:"Papas Fritas",price:2500,cat:"Antojitos",emoji:"\uD83C\uDF5F"},
+  {id:49,name:"Tostadas con Jale",price:1000,cat:"Antojitos",emoji:"\uD83C\uDF5E"},
+  {id:50,name:"Salchipapas",price:3000,cat:"Antojitos",emoji:"\uD83C\uDF2D"},
+  {id:51,name:"Prensada de Queso",price:2200,cat:"Antojitos",emoji:"\uD83E\uDD6A"},
+  {id:52,name:"Sándwich de Jamón y Queso",price:2000,cat:"Antojitos",emoji:"\uD83E\uDD6A"},
+  {id:53,name:"Sándwich de Pollo o Carne",price:2300,cat:"Antojitos",emoji:"\uD83E\uDD6A"},
+  {id:54,name:"Empanadas",price:2300,cat:"Antojitos",emoji:"\uD83E\uDED4"},
+  {id:55,name:"Empanadas Mixtas",price:2500,cat:"Antojitos",emoji:"\uD83E\uDED4"},
+  {id:56,name:"Empanadas Arregladas",price:3300,cat:"Antojitos",emoji:"\uD83E\uDED4"},
+  {id:57,name:"Plátano Maduro con Queso o Natilla",price:2500,cat:"Antojitos",emoji:"\uD83C\uDF4C"},
+  {id:58,name:"Tacos",price:2500,cat:"Antojitos",emoji:"\uD83C\uDF2E"},
+  {id:59,name:"Patacones con Frijoles",price:3000,cat:"Antojitos",emoji:"\uD83E\uDED8"},
+  {id:60,name:"Patacones con Carne Desmechada",price:3800,cat:"Antojitos",emoji:"\uD83E\uDED8"},
+  {id:61,name:"Hamburguesa con Papas",price:4000,cat:"Antojitos",emoji:"\uD83C\uDF54"},
+  {id:62,name:"Quesadilla de Pollo o Carne",price:4000,cat:"Antojitos",emoji:"\uD83E\uDEE3"},
+  {id:63,name:"Quesadilla Mixta",price:4300,cat:"Antojitos",emoji:"\uD83E\uDEE3"},
+  {id:64,name:"Alitas de Pollo",price:4300,cat:"Antojitos",emoji:"\uD83C\uDF57"},
+  {id:65,name:"Dedos de Pollo o Pescado",price:4800,cat:"Antojitos",emoji:"\uD83C\uDF57"},
+  {id:66,name:"Nachos de Pollo o Carne",price:4500,cat:"Antojitos",emoji:"\uD83C\uDF3D"},
+  {id:67,name:"Nachos Mixto",price:5000,cat:"Antojitos",emoji:"\uD83C\uDF3D"},
+  {id:68,name:"Ceviche de Pescado",price:5000,cat:"Antojitos",emoji:"\uD83D\uDC1F"},
+  {id:69,name:"Ceviche de Camarón",price:5500,cat:"Antojitos",emoji:"\uD83E\uDD90"},
+  {id:70,name:"Ceviche Mixto",price:6000,cat:"Antojitos",emoji:"\uD83E\uDD90"},
+  /* +PROTEÍNAS */
+  {id:71,name:"Salchicha",price:500,cat:"+Proteínas",emoji:"\uD83C\uDF2D"},
+  {id:72,name:"Salchichón",price:500,cat:"+Proteínas",emoji:"\uD83C\uDF2D"},
+  {id:73,name:"Jamón",price:500,cat:"+Proteínas",emoji:"\uD83E\uDD69"},
+  {id:74,name:"Chorizo",price:600,cat:"+Proteínas",emoji:"\uD83C\uDF2D"},
+  {id:75,name:"Tosineta",price:1000,cat:"+Proteínas",emoji:"\uD83E\uDD53"},
+  {id:76,name:"Torta de Carne",price:1000,cat:"+Proteínas",emoji:"\uD83E\uDD69"},
+  {id:77,name:"Carne en Salsa",price:1800,cat:"+Proteínas",emoji:"\uD83E\uDD69"},
+  {id:78,name:"Pollo en Salsa",price:1800,cat:"+Proteínas",emoji:"\uD83C\uDF57"},
+  {id:79,name:"Mondongo",price:1800,cat:"+Proteínas",emoji:"\uD83C\uDF56"},
+  {id:80,name:"Filete de Pescado",price:1800,cat:"+Proteínas",emoji:"\uD83D\uDC1F"},
+  {id:81,name:"Filete de Pollo",price:1800,cat:"+Proteínas",emoji:"\uD83C\uDF57"},
+  {id:82,name:"Bistec",price:1800,cat:"+Proteínas",emoji:"\uD83E\uDD69"},
+  {id:83,name:"Chuleta",price:1800,cat:"+Proteínas",emoji:"\uD83E\uDD69"},
+  {id:84,name:"Hígado",price:1800,cat:"+Proteínas",emoji:"\uD83E\uDD69"},
+  {id:85,name:"Mechada",price:1800,cat:"+Proteínas",emoji:"\uD83E\uDD69"},
+  {id:86,name:"Huevos Rancheros",price:2000,cat:"+Proteínas",emoji:"\uD83C\uDF73"},
+  {id:87,name:"Omelet",price:2000,cat:"+Proteínas",emoji:"\uD83C\uDF73"},
+  {id:88,name:"Costilla",price:2000,cat:"+Proteínas",emoji:"\uD83E\uDDB4"},
+  {id:89,name:"Camarones",price:2000,cat:"+Proteínas",emoji:"\uD83E\uDD90"},
+  {id:90,name:"Lengua",price:2800,cat:"+Proteínas",emoji:"\uD83E\uDD69"},
+  /* +ACOMPAÑAMIENTOS */
+  {id:91,name:"Tostadas (1)",price:400,cat:"+Acomp.",emoji:"\uD83C\uDF5E"},
+  {id:92,name:"Patacones (1)",price:500,cat:"+Acomp.",emoji:"\uD83E\uDED8"},
+  {id:93,name:"Plátano Maduro",price:500,cat:"+Acomp.",emoji:"\uD83C\uDF4C"},
+  {id:94,name:"Huevos",price:500,cat:"+Acomp.",emoji:"\uD83C\uDF73"},
+  {id:95,name:"Tortiricas",price:500,cat:"+Acomp.",emoji:"\uD83C\uDF5E"},
+  {id:96,name:"Chips (10)",price:500,cat:"+Acomp.",emoji:"\uD83E\uDD54"},
+  {id:97,name:"Tomate",price:600,cat:"+Acomp.",emoji:"\uD83C\uDF45"},
+  {id:98,name:"Queso",price:600,cat:"+Acomp.",emoji:"\uD83E\uDDC0"},
+  {id:99,name:"Ensalada",price:600,cat:"+Acomp.",emoji:"\uD83E\uDD57"},
+  {id:100,name:"Verde",price:600,cat:"+Acomp.",emoji:"\uD83E\uDD66"},
+  {id:101,name:"Frijoles",price:600,cat:"+Acomp.",emoji:"\uD83E\uDED8"},
+  {id:102,name:"Arroz",price:800,cat:"+Acomp.",emoji:"\uD83C\uDF5A"},
+  {id:103,name:"Tostadas",price:800,cat:"+Acomp.",emoji:"\uD83C\uDF5E"},
+  {id:104,name:"Ensalada Fría",price:800,cat:"+Acomp.",emoji:"\uD83E\uDD57"},
+  {id:105,name:"Orden de Tostadas",price:800,cat:"+Acomp.",emoji:"\uD83C\uDF5E"},
+  {id:106,name:"Tortilla Mediana",price:900,cat:"+Acomp.",emoji:"\uD83E\uDEE3"},
+  {id:107,name:"Pinto",price:1000,cat:"+Acomp.",emoji:"\uD83C\uDF73"},
+  {id:108,name:"Chimichurri",price:1000,cat:"+Acomp.",emoji:"\uD83E\uDDC4"},
+  {id:109,name:"Ensalada Grande",price:1000,cat:"+Acomp.",emoji:"\uD83E\uDD57"},
+  {id:110,name:"Huevos con Jamón",price:1000,cat:"+Acomp.",emoji:"\uD83C\uDF73"},
+  {id:111,name:"Papas Peq",price:1000,cat:"+Acomp.",emoji:"\uD83C\uDF5F"},
+  {id:112,name:"Puré",price:1000,cat:"+Acomp.",emoji:"\uD83E\uDD54"},
+  {id:113,name:"Vegetales",price:1000,cat:"+Acomp.",emoji:"\uD83E\uDD66"},
+  {id:114,name:"Prensada (1)",price:1000,cat:"+Acomp.",emoji:"\uD83E\uDD6A"},
+  {id:115,name:"Orden Repollo",price:1000,cat:"+Acomp.",emoji:"\uD83E\uDD66"},
+  {id:116,name:"Tortilla Grande",price:1200,cat:"+Acomp.",emoji:"\uD83E\uDEE3"},
+  {id:117,name:"Huevos con Tomate",price:1500,cat:"+Acomp.",emoji:"\uD83C\uDF73"},
+  {id:118,name:"Huevos con Tosineta",price:1500,cat:"+Acomp.",emoji:"\uD83C\uDF73"},
+  {id:119,name:"Hamburguesa (sin papas)",price:3000,cat:"+Acomp.",emoji:"\uD83C\uDF54"},
+  /* +SALSAS */
+  {id:120,name:"Jalea",price:300,cat:"+Salsas",emoji:"\uD83C\uDF6F"},
+  {id:121,name:"Natilla",price:500,cat:"+Salsas",emoji:"\uD83E\uDD5B"},
+  {id:122,name:"Salsa BBQ",price:500,cat:"+Salsas",emoji:"\uD83E\uDED9"},
+  {id:123,name:"Salsa de Queso",price:500,cat:"+Salsas",emoji:"\uD83E\uDDC0"},
+  {id:124,name:"Mostaza Miel",price:500,cat:"+Salsas",emoji:"\uD83C\uDF6F"},
+  {id:125,name:"Salsa Blanca o Roja",price:1000,cat:"+Salsas",emoji:"\uD83E\uDED9"},
+  {id:126,name:"Salsa Ranchera",price:1500,cat:"+Salsas",emoji:"\uD83C\uDF36"},
+  /* +SNACKS */
+  {id:127,name:"Bubalu",price:100,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:128,name:"Chois Peq",price:200,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:129,name:"Trident Peq",price:200,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:130,name:"Chao",price:300,cat:"+Snacks",emoji:"\uD83C\uDF6B"},
+  {id:131,name:"Popis",price:300,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:132,name:"Chocolito",price:400,cat:"+Snacks",emoji:"\uD83C\uDF6B"},
+  {id:133,name:"Cajetas Peq",price:500,cat:"+Snacks",emoji:"\uD83C\uDF6E"},
+  {id:134,name:"Trident",price:600,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:135,name:"Halls",price:600,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:136,name:"Chois",price:600,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:137,name:"Tuto Peq",price:600,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:138,name:"Tuto Zul",price:800,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:139,name:"Empanadas Doña Vilma",price:1000,cat:"+Snacks",emoji:"\uD83E\uDED4"},
+  {id:140,name:"Snickers",price:1000,cat:"+Snacks",emoji:"\uD83C\uDF6B"},
+  {id:141,name:"Semillas Marañón",price:1000,cat:"+Snacks",emoji:"\uD83C\uDF30"},
+  {id:142,name:"Cajeta Grande",price:1000,cat:"+Snacks",emoji:"\uD83C\uDF6E"},
+  {id:143,name:"Trident Grande",price:1200,cat:"+Snacks",emoji:"\uD83C\uDF6C"},
+  {id:144,name:"Empanadas de Maíz",price:2000,cat:"+Snacks",emoji:"\uD83E\uDED4"},
+  {id:145,name:"Semillas Cacao",price:2000,cat:"+Snacks",emoji:"\uD83C\uDF30"},
+  /* +BEBIDAS AD. */
+  {id:146,name:"Botella Agua Peq",price:1000,cat:"+Bebidas Ad.",emoji:"\uD83D\uDCA7"},
+  {id:155,name:"Natural",price:1000,cat:"+Bebidas Ad.",emoji:"\uD83E\uDD64"},
+  {id:156,name:"Tropical",price:1000,cat:"+Bebidas Ad.",emoji:"\uD83E\uDD64"},
+  {id:147,name:"Tucán",price:1200,cat:"+Bebidas Ad.",emoji:"\uD83E\uDDE3"},
+  {id:157,name:"Gaseosa",price:1200,cat:"+Bebidas Ad.",emoji:"\uD83C\uDF7E"},
+  {id:148,name:"Jet",price:1500,cat:"+Bebidas Ad.",emoji:"\uD83E\uDD5B"},
+  {id:149,name:"Botella Agua Grande",price:1500,cat:"+Bebidas Ad.",emoji:"\uD83D\uDCA7"},
+  {id:150,name:"Max",price:1800,cat:"+Bebidas Ad.",emoji:"\uD83E\uDDE3"},
+  {id:151,name:"Monster",price:1800,cat:"+Bebidas Ad.",emoji:"\uD83E\uDDE3"},
+  {id:152,name:"Electrolit",price:2000,cat:"+Bebidas Ad.",emoji:"\uD83D\uDCA7"},
+  /* +VARIOS */
+  {id:153,name:"Empaques",price:200,cat:"+Varios",emoji:"\uD83D\uDCE6"},
+  {id:154,name:"Chilero",price:3000,cat:"+Varios",emoji:"\uD83C\uDF36"},
 ];
-let nextMid=16,nextVid=1,nextUid=3;
+let nextMid=158,nextVid=1,nextUid=3;
 let mesas=["Mesa 1","Mesa 2","Mesa 3","Mesa 4","Mesa 5","Mesa 6","Mesa 7","Mesa 8","Para llevar","Barra"];
 let orders={},ventas=[],gastos=[],cierres=[];
 let users=[
@@ -379,7 +547,7 @@ let activeUser=null,pendingLoginId=null,loginPinStr="",pinCobroCb=null,pinCobroS
 let splitGroups=[],splitAssignment={},nextGroupId=1;
 let descuento={tipo:'pct',valor:0};
 let cobraItbis=true,cobraServicio=false;
-let ticketConfig={nombre:'Mi Restaurante',slogan:'',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false};
+let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false};
 let ventasFiltro=null;
 let cambiarPinState={uid:null,phase:'current',str:'',newPin:''};
 
@@ -391,8 +559,8 @@ function showLoginUsers(){
   pendingLoginId=null;loginPinStr="";
   document.getElementById("loginBox").innerHTML=`
     <div style="text-align:center;margin-bottom:22px">
-      <div style="font-size:40px">\uD83C\uDF7D</div>
-      <div style="font-size:20px;font-weight:700;color:#111;margin-top:8px">Mi Restaurante</div>
+      <div style="font-size:40px">&#127799;</div>
+      <div style="font-size:20px;font-weight:700;color:#111;margin-top:8px">Soda El Tucan</div>
       <div style="font-size:13px;color:#666;margin-top:4px">Selecciona tu usuario</div>
     </div>
     ${users.map(u=>`<button class="user-sel-btn" onclick="selectLoginUser(${u.id})">
@@ -542,9 +710,12 @@ function renderMesaModal(){
         <button class="pb${payMethod==="Tarjeta"?" sel":""}" onclick="selPay('Tarjeta')">\uD83D\uDCB3 Tarjeta</button>
         <button class="pb${payMethod==="SINPE"?" sel":""}" onclick="selPay('SINPE')">\uD83D\uDCF1 SINPE</button>
       </div>
+      ${TABLET_MODE?`
+      <button class="btn-cobrar" style="background:#1D9E75;font-size:15px" onclick="enviarACocina()" ${hasItems?'':'disabled'}>\ud83d\uddd1 Enviar a Cocina</button>
+      <button class="btn-sec" onclick="closeMesa()">Cancelar</button>`:`
       <button class="btn-cobrar" id="btn-cobrar-main" onclick="iniciarCobro()" ${can?"":"disabled"}>Cobrar ${fmt(total)}</button>
       <button class="btn-sec" style="margin-bottom:6px;${hasItems?"border-color:#8B5CF6;color:#5B21B6;background:#F3E8FF":""}" onclick="${hasItems?"showSplitModal()":""}" ${hasItems?"":"disabled"}>\u2702 Dividir cuenta</button>
-      <button class="btn-sec" onclick="closeMesa()">Cancelar</button>
+      <button class="btn-sec" onclick="closeMesa()">Cancelar</button>`}
     </div>
   </div>`;
   document.body.appendChild(div);
@@ -645,8 +816,7 @@ function confirmarPago(cobradoPor){
   const vuelto=Math.max(0,recibido-total);
   const vueltoDesg=payMethod==="Efectivo"&&vuelto>0?calcVueltoDesglose(vuelto):[];
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  const itemsConEmoji=ord.items.map(i=>({...i,emoji:menu.find(m=>m.id===i.id)?.emoji||'\uD83C\uDF7D'}));
-  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:itemsConEmoji,metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
+  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:[...ord.items],metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
   if(payMethod==="Efectivo"){for(const[v,c]of Object.entries(efBilletes))cajaBilletes[v]=(cajaBilletes[v]||0)+c;for(const vd of vueltoDesg)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
   const ventaGuardada=ventas[ventas.length-1];
   orders[activeMesa]={items:[]};saveLS();closeEfModal();closeMesa();
@@ -681,12 +851,7 @@ function getSA(iid,gid){return splitAssignment[iid+'-'+gid]||0;}
 function setSA(iid,gid,qty){const k=iid+'-'+gid;if(qty<=0)delete splitAssignment[k];else splitAssignment[k]=qty;}
 function getItemAssigned(item){return splitGroups.reduce((a,g)=>a+getSA(item.id,g.id),0);}
 function getGroupSubtotal(gid){return orders[activeMesa].items.reduce((a,item)=>a+getSA(item.id,gid)*item.price,0);}
-function getGroupTotal(gid){
-  const sub=getGroupSubtotal(gid);
-  const serv=cobraServicio?Math.round(sub*0.10):0;
-  const tax=cobraItbis?Math.round((sub+serv)*0.13):0;
-  return Math.round(sub+serv+tax);
-}
+function getGroupTotal(gid){return Math.round(getGroupSubtotal(gid)*1.13);}
 function splitReady(){
   if(!splitGroups.length||!splitGroups.every(g=>g.method))return false;
   return orders[activeMesa].items.every(item=>getItemAssigned(item)===item.qty);
@@ -719,9 +884,7 @@ function showSplitModal(){
     const assigned=getItemAssigned(item);
     const remaining=item.qty-assigned;
     const done=remaining===0;
-    const serv=cobraServicio?Math.round(item.price*item.qty*0.10):0;
-    const itbis=cobraItbis?Math.round((item.price*item.qty+serv)*0.13):0;
-    const priceWithTax=item.price*item.qty+serv+itbis;
+    const priceWithTax=Math.round(item.price*item.qty*1.13);
     const controls=splitGroups.map((g,gi)=>{
       const bg=GRP_BG[gi%5],bd=GRP_BD[gi%5],tc=GRP_TC[gi%5];
       const qty=getSA(item.id,g.id);
@@ -747,10 +910,7 @@ function showSplitModal(){
 
   const subSinImpuesto=ord.items.reduce((a,i)=>a+i.price*i.qty,0);
   const asignadoSub=splitGroups.reduce((a,g)=>a+getGroupSubtotal(g.id),0);
-  const diffSub=subSinImpuesto-asignadoSub;
-  const diffServ=cobraServicio?Math.round(diffSub*0.10):0;
-  const diffTax=cobraItbis?Math.round((diffSub+diffServ)*0.13):0;
-  const sinAsignar=Math.round(diffSub+diffServ+diffTax);
+  const sinAsignar=Math.round((subSinImpuesto-asignadoSub)*1.13);
   const ready=splitReady();
 
   const div=document.createElement("div");div.className="overlay-bg";div.id="splitModal";div.style.zIndex="150";
@@ -799,8 +959,7 @@ function confirmarPagoSplit(cobradoPor){
   const ord=orders[activeMesa];const{sub,descMonto,servMonto,tax,total}=getTotal();
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
   const pagos=splitGroups.map(g=>({name:g.name,method:g.method,amount:getGroupTotal(g.id)}));
-  const itemsConEmoji=ord.items.map(i=>({...i,emoji:menu.find(m=>m.id===i.id)?.emoji||'\uD83C\uDF7D'}));
-  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:itemsConEmoji,metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
+  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
   orders[activeMesa]={items:[]};
   splitGroups=[];splitAssignment={};
   const ventaGuardada=ventas[ventas.length-1];
@@ -1119,8 +1278,8 @@ function buildTicketHTML(v){
   // Totals
   h+=row('Subtotal:',fmt(v.sub));
   if(v.descMonto>0)h+=`<div class="ticket-row" style="color:#c0392b"><span>Descuento:</span><span>&minus; ${fmt(v.descMonto)}</span></div>`;
-  if(v.servMonto>0)h+=row('Servicio 10%:',fmt(v.servMonto));
-  if(v.tax>0)h+=row('ITBIS 13%:',fmt(v.tax));
+  h+=row('Servicio 10%:',v.servMonto>0?fmt(v.servMonto):fmt(0));
+  h+=row('ITBIS 13%:',v.tax>0?fmt(v.tax):fmt(0));
   h+=hr('solid');
   h+=row('<strong>TOTAL:</strong>',`<strong>${fmt(v.total)}</strong>`,'ticket-bold');
   h+=hr('solid');
@@ -1145,8 +1304,8 @@ function buildTicketHTML(v){
 function showTicket(v){
   const old=document.getElementById("ticketOverlay");if(old)old.remove();
   const div=document.createElement("div");div.className="ticket-overlay";div.id="ticketOverlay";
-  div.setAttribute('id','ticketOverlay');
-  div.innerHTML=`<div class="ticket-wrap" id="ticketPrintRoot">
+  div.setAttribute('id','ticketPrintRoot');
+  div.innerHTML=`<div class="ticket-wrap">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px" class="ticket-no-print">
       <div style="font-size:14px;font-weight:600;color:#111">&#128220; Tiquete de venta</div>
       <span style="font-size:12px;color:#aaa">${v.mesa}</span>
@@ -1159,11 +1318,10 @@ function showTicket(v){
   </div>`;
   document.body.appendChild(div);
 }
-function cerrarTicket(){const m=document.getElementById("ticketOverlay");if(m)m.remove();renderSalon();}
+function cerrarTicket(){const m=document.getElementById("ticketPrintRoot");if(m)m.remove();renderSalon();}
 function printTicket(){
   const content=document.getElementById("ticketPrintArea");if(!content)return;
   const w=window.open('','_blank','width=420,height=650');
-  if(!w)return;
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tiquete</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -1233,6 +1391,7 @@ function saveLS(){
     localStorage.setItem('rpos_nextUid',nextUid);
     localStorage.setItem('rpos_ticketConfig',JSON.stringify(ticketConfig));
   }catch(e){}
+  try{fbOrders.set(orders);}catch(e){}
 }
 function loadLS(){
   try{
@@ -1251,14 +1410,65 @@ function loadLS(){
   }catch(e){}
 }
 
+/* ── COMANDA (TABLET) ── */
+function enviarACocina(){
+  const ord=orders[activeMesa];
+  if(!ord||!ord.items.length)return;
+  try{fbOrders.set(orders);}catch(e){}
+  imprimirComanda(activeMesa,ord);
+  toast('✅ Comanda enviada a cocina');
+  closeMesa();
+}
+function imprimirComanda(mesa,ord){
+  const w=window.open('','_blank','width=420,height=700');
+  if(!w){toast('⚠️ Permitié ventanas emergentes para imprimir');return;}
+  w.document.write(buildComandaHTML(mesa,ord));
+  w.document.close();
+  setTimeout(()=>{w.print();},800);
+}
+function buildComandaHTML(mesa,ord){
+  const hora=new Date().toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});
+  const fecha=new Date().toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const emp=activeUser?activeUser.name:'';
+  const rows=ord.items.map(i=>`<tr><td style="font-size:22px;font-weight:900;padding:4px 0;width:36px">${i.qty}x</td><td style="font-size:15px;font-weight:700;padding:4px 4px;line-height:1.3">${i.name}</td></tr>`).join('');
+  const total=ord.items.reduce((a,i)=>a+i.qty,0);
+  return`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    @page{margin:2mm;size:80mm auto}
+    body{font-family:'Courier New',monospace;width:74mm;margin:2mm;padding:0;font-size:13px}
+    h2{text-align:center;font-size:22px;font-weight:900;margin:0 0 2px;letter-spacing:3px}
+    .sub{text-align:center;font-size:11px;margin-bottom:8px;color:#333}
+    .mesa-box{font-size:28px;font-weight:900;text-align:center;background:#000;color:#fff;padding:6px 4px;margin:6px 0;letter-spacing:2px}
+    .emp{text-align:center;font-size:12px;margin-bottom:4px}
+    .sep-solid{border:none;border-top:2px solid #000;margin:5px 0}
+    .sep-dash{border:none;border-top:2px dashed #000;margin:5px 0}
+    table{width:100%;border-collapse:collapse}
+    .footer{text-align:center;font-size:11px;margin-top:5px}
+  </style></head><body>
+    <h2>★ COCINA ★</h2>
+    <div class="sub">${fecha} — ${hora}</div>
+    <div class="mesa-box">${mesa}</div>
+    ${emp?`<div class="emp">Mesero: <b>${emp}</b></div>`:''}
+    <hr class="sep-solid">
+    <table>${rows}</table>
+    <hr class="sep-dash">
+    <div class="footer">${total} item(s) en total</div>
+  </body></html>`;
+}
+
 /* ── TOAST ── */
 function toast(msg){const old=document.getElementById("_toast");if(old)old.remove();const t=document.createElement("div");t.className="toast";t.id="_toast";t.innerHTML=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);}
 
 /* ── INIT ── */
 loadLS();
 ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(b)b.style.display="none";});
+if(TABLET_MODE){
+  document.querySelector('.topnav h1').innerHTML='&#127799; Soda El Tucan <span style="font-size:11px;background:#E1F5EE;color:#085041;padding:2px 10px;border-radius:20px;font-weight:600;margin-left:6px">&#128241; Modo Mesero</span>';
+  ['ventas','gastos','cierre','menu-admin','usuarios'].forEach(s=>{const b=document.getElementById("nav-"+s);if(b)b.remove();});
+}
 showLoginUsers();
 renderSalon();
 </script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </body>
 </html>
