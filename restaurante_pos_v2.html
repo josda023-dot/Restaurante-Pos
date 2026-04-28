@@ -279,7 +279,7 @@ body{background:#f5f5f0;min-height:100vh}
         <div style="display:flex;align-items:flex-end"><button class="btn-green" onclick="addMenuItem()">Agregar</button></div>
       </div>
     </div>
-    <div class="card"><div class="section-title">Platillos actuales</div><div id="menuList"></div></div>
+    <div class="card"><div class="section-title">Platillos actuales</div><div id="menuFiltroBar" style="margin-bottom:10px"></div><div id="menuList"></div></div>
   </div>
   <div id="mpanel-categorias" style="display:none">
     <div class="card" style="max-width:420px">
@@ -551,6 +551,7 @@ let descuento={tipo:'pct',valor:0};
 let cobraItbis=true,cobraServicio=false;
 let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false};
 let ventasFiltro=null;
+let menuAdminCatFiltro=null;
 let cambiarPinState={uid:null,phase:'current',str:'',newPin:''};
 
 const fmt=n=>"\u20A1"+Math.round(n).toLocaleString("es-CR");
@@ -1093,9 +1094,13 @@ function hacerCierre(){
 /* ── MENU ADMIN ── */
 function renderMenuAdmin(){
   const sel=document.getElementById("maCat");if(sel)sel.innerHTML=cats.map(c=>`<option>${c}</option>`).join("");
+  const fb=document.getElementById("menuFiltroBar");
+  if(fb){fb.innerHTML=`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="ctab${!menuAdminCatFiltro?" active":""}" onclick="setMenuAdminFiltro(null)">Todas (${menu.length})</button>${cats.map(c=>`<button class="ctab${menuAdminCatFiltro===c?" active":""}" onclick="setMenuAdminFiltro('${c.replace(/'/g,"\'")}')">${c} <span style="font-weight:400;opacity:.7">${menu.filter(i=>i.cat===c).length}</span></button>`).join("")}</div>`;}
   const list=document.getElementById("menuList");if(!list)return;
-  list.innerHTML=menu.map(i=>`<div class="item-edit-row" id="itemrow-${i.id}"><span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-blue" onclick="startEditItem(${i.id})">\u270E Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`).join("")||`<div class="empty">No hay platillos</div>`;
+  const filtered=menuAdminCatFiltro?menu.filter(i=>i.cat===menuAdminCatFiltro):menu;
+  list.innerHTML=filtered.map(i=>`<div class="item-edit-row" id="itemrow-${i.id}"><span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-blue" onclick="startEditItem(${i.id})">✎ Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`).join("")||`<div class="empty">No hay platillos en esta categoría</div>`;
 }
+function setMenuAdminFiltro(cat){menuAdminCatFiltro=cat;renderMenuAdmin();}
 function startEditItem(id){
   const item=menu.find(i=>i.id===id);if(!item)return;const row=document.getElementById("itemrow-"+id);if(!row)return;
   row.innerHTML=`<input class="edit-mini" style="width:40px" value="${item.emoji}" id="ei-em-${id}"><input class="edit-mini" style="flex:1;min-width:120px" value="${item.name}" id="ei-nm-${id}"><select class="edit-mini" id="ei-cat-${id}">${cats.map(c=>`<option${c===item.cat?" selected":""}>${c}</option>`).join("")}</select><input class="edit-mini" style="width:90px" type="number" value="${item.price}" id="ei-pr-${id}"><button class="btn-green" onclick="saveEditItem(${id})">\u2713 Guardar</button><button class="btn-sec" style="width:auto;padding:6px 10px" onclick="renderMenuAdmin()">Cancelar</button>`;
