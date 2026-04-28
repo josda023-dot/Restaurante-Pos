@@ -672,7 +672,7 @@ function renderMesaModal(){
   const div=document.createElement("div");div.className="overlay-bg";div.id="mesaModal";
   const catTabs=availCats.map(c=>`<button class="ctab${c===activeCat?" active":""}" onclick="setMesaCat('${c.replace(/'/g,"\\'")}');">${c}</button>`).join("");
   const items=menu.filter(i=>i.cat===activeCat).map(i=>`<div class="mi" onclick="addToOrder(${i.id})"><div class="mi-em">${i.emoji}</div><div class="mi-nm">${i.name}</div><div class="mi-pr">${fmt(i.price)}</div></div>`).join("")||`<div class="empty">Sin platillos</div>`;
-  const orderRows=ord.items.length?ord.items.map(o=>`<div class="or"><button class="qb" onclick="adjQty('${activeMesa}',${o.id},-1)">&minus;</button><span class="or-q">${o.qty}</span><button class="qb" onclick="adjQty('${activeMesa}',${o.id},1)">+</button><span class="or-nm">${o.name}</span><span class="or-pr">${fmt(o.price*o.qty)}</span></div>`).join(""):`<div class="empty">Sin items aun</div>`;
+  const orderRows=ord.items.length?ord.items.map(o=>`<div class="or" style="flex-wrap:wrap;align-items:center"><button class="qb" onclick="adjQty('${activeMesa}',${o.id},-1)">&minus;</button><span class="or-q">${o.qty}</span><button class="qb" onclick="adjQty('${activeMesa}',${o.id},1)">+</button><span class="or-nm">${o.name}</span><span class="or-pr">${fmt(o.price*o.qty)}</span><input type="text" placeholder="&#128221; Nota..." value="${(o.nota||'').replace(/"/g,'&quot;')}" oninput="setItemNota('${activeMesa}',${o.id},this.value)" style="width:100%;font-size:11px;padding:3px 8px;border:1px solid ${o.nota?'#5DCAA5':'#e5e5e5'};border-radius:6px;color:${o.nota?'#085041':'#888'};background:${o.nota?'#f0faf6':'#fafaf8'};margin-top:3px;outline:none;font-style:${o.nota?'normal':'italic'}"></div>`).join(""):`<div class="empty">Sin items aun</div>`;
   const can=payMethod&&ord.items.length;const hasItems=ord.items.length>0;
   div.innerHTML=`<div class="modal">
     <div class="modal-menu">
@@ -724,7 +724,8 @@ function renderMesaModal(){
   document.body.appendChild(div);
 }
 function setMesaCat(c){activeCat=c;renderMesaModal();}
-function addToOrder(id){const item=menu.find(i=>i.id===id);if(!item)return;const ord=orders[activeMesa];const ex=ord.items.find(i=>i.id===id);if(ex)ex.qty++;else ord.items.push({id,name:item.name,price:item.price,qty:1});renderMesaModal();}
+function addToOrder(id){const item=menu.find(i=>i.id===id);if(!item)return;const ord=orders[activeMesa];const ex=ord.items.find(i=>i.id===id);if(ex)ex.qty++;else ord.items.push({id,name:item.name,price:item.price,qty:1,nota:''});renderMesaModal();}
+function setItemNota(mesa,id,val){const ord=orders[mesa];if(!ord)return;const it=ord.items.find(i=>i.id===id);if(it)it.nota=val;}
 function adjQty(mesa,id,d){const ord=orders[mesa];const idx=ord.items.findIndex(i=>i.id===id);if(idx<0)return;ord.items[idx].qty+=d;if(ord.items[idx].qty<=0)ord.items.splice(idx,1);renderMesaModal();}
 function selPay(m){payMethod=m;efBilletes={};renderMesaModal();}
 
@@ -1437,7 +1438,7 @@ function buildComandaHTML(mesa,ord){
   const hora=new Date().toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});
   const fecha=new Date().toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const emp=activeUser?activeUser.name:'';
-  const rows=ord.items.map(i=>`<tr><td style="font-size:22px;font-weight:900;padding:4px 0;width:36px">${i.qty}x</td><td style="font-size:15px;font-weight:700;padding:4px 4px;line-height:1.3">${i.name}</td></tr>`).join('');
+  const rows=ord.items.map(i=>`<tr><td style="font-size:22px;font-weight:900;padding:4px 0;width:36px;vertical-align:top">${i.qty}x</td><td style="font-size:15px;font-weight:700;padding:4px 4px;line-height:1.3">${i.name}${i.nota?`<div style="font-size:13px;font-weight:500;font-style:italic;color:#333;margin-top:2px">&#8594; ${i.nota}</div>`:''}</td></tr>`).join('');
   const total=ord.items.reduce((a,i)=>a+i.qty,0);
   return`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
     @page{margin:2mm;size:80mm auto}
