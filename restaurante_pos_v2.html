@@ -746,6 +746,8 @@ function renderMesaModal(){
       <button class="btn-sec" onclick="closeMesa()">Cancelar</button>
     </div>
   </div>`;
+  document.body.appendChild(div);
+}
 function setMesaCat(c){activeCat=c;renderMesaModal();}
 function addToOrder(id){const item=menu.find(i=>i.id===id);if(!item)return;const ord=orders[activeMesa];const ex=ord.items.find(i=>i.id===id);if(ex)ex.qty++;else ord.items.push({id,name:item.name,price:item.price,qty:1,nota:''});renderMesaModal();}
 function setItemNota(mesa,id,val){const ord=orders[mesa];if(!ord)return;const it=ord.items.find(i=>i.id===id);if(it)it.nota=val;}
