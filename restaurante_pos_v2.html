@@ -221,7 +221,7 @@ body{background:#f5f5f0;min-height:100vh}
   <div class="card">
     <div class="section-title">Ventas de hoy</div>
     <div style="overflow-x:auto">
-      <table class="tbl"><thead><tr><th>Hora</th><th>Mesa</th><th>Metodo</th><th>Cobrado por</th><th>Recibido</th><th>Vuelto</th><th>Total</th></tr></thead>
+      <table class="tbl"><thead><tr><th>Fecha</th><th>Hora</th><th>Mesa</th><th>Metodo</th><th>Cobrado por</th><th>Recibido</th><th>Vuelto</th><th>Total</th><th></th></tr></thead>
       <tbody id="ventasTbody"></tbody></table>
     </div>
   </div>
@@ -551,6 +551,7 @@ let descuento={tipo:'pct',valor:0};
 let cobraItbis=true,cobraServicio=false;
 let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false};
 let ventasFiltro=null;
+let ventasMesFiltro=null;
 let menuAdminCatFiltro=null;
 let cambiarPinState={uid:null,phase:'current',str:'',newPin:''};
 
@@ -845,7 +846,7 @@ function confirmarPago(cobradoPor){
   const vuelto=Math.max(0,recibido-total);
   const vueltoDesg=payMethod==="Efectivo"&&vuelto>0?calcVueltoDesglose(vuelto):[];
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:[...ord.items],metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
+  ventas.push({id:nextVid++,hora:hm,fecha:now.toISOString().slice(0,10),mesa:activeMesa,items:[...ord.items],metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
   if(payMethod==="Efectivo"){for(const[v,c]of Object.entries(efBilletes))cajaBilletes[v]=(cajaBilletes[v]||0)+c;for(const vd of vueltoDesg)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
   const ventaGuardada=ventas[ventas.length-1];
   orders[activeMesa]={items:[]};saveLS();closeEfModal();closeMesa();
@@ -988,7 +989,7 @@ function confirmarPagoSplit(cobradoPor){
   const ord=orders[activeMesa];const{sub,descMonto,servMonto,tax,total}=getTotal();
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
   const pagos=splitGroups.map(g=>({name:g.name,method:g.method,amount:getGroupTotal(g.id)}));
-  ventas.push({id:nextVid++,hora:hm,mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
+  ventas.push({id:nextVid++,hora:hm,fecha:now.toISOString().slice(0,10),mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
   orders[activeMesa]={items:[]};
   splitGroups=[];splitAssignment={};
   const ventaGuardada=ventas[ventas.length-1];
@@ -1017,40 +1018,63 @@ function showResultadoSplit(pagos,cobradoPor,total){
 
 /* ── VENTAS ── */
 function setVentasFiltro(emp){ventasFiltro=emp;renderVentas();}
+function setVentasMesFiltro(m){ventasMesFiltro=m;ventasFiltro=null;renderVentas();}
+function reprintComanda(v){
+  const ord={items:v.items};
+  const w=window.open('','_blank','width=420,height=700');
+  if(!w){toast('⚠️ Permitié ventanas emergentes para imprimir');return;}
+  w.document.write(buildComandaHTML(v.mesa,ord));
+  w.document.close();
+  setTimeout(()=>w.print(),800);
+}
 function renderVentas(){
+  const today=new Date().toISOString().slice(0,10);
+  // Collect all months available in ventas (for history browsing)
+  const allMonths=[...new Set(ventas.map(v=>v.fecha?v.fecha.slice(0,7):null).filter(Boolean))].sort().reverse();
+  // Pool: if month filter active, show that month's ventas; otherwise show today's
+  const pool=ventasMesFiltro?ventas.filter(v=>v.fecha&&v.fecha.slice(0,7)===ventasMesFiltro):ventas.filter(v=>!v.fecha||v.fecha===today);
   // Filter bar
-  const empleados=[...new Set(ventas.map(v=>v.cobradoPor).filter(e=>e&&e!=="&mdash;"))];
   const fb=document.getElementById("ventasFiltroBar");
   if(fb){
-    if(empleados.length>1){
-      const bstyle=(active)=>`padding:5px 12px;border-radius:8px;border:1px solid ${active?'#1D9E75':'#ddd'};background:${active?'#E1F5EE':'transparent'};color:${active?'#085041':'#666'};font-size:12px;cursor:pointer;font-weight:${active?600:400}`;
-      fb.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-bottom:8px">
-        <span style="font-size:12px;color:#666;font-weight:600">Filtrar por empleado:</span>
-        <button onclick="setVentasFiltro(null)" style="${bstyle(!ventasFiltro)}">Todos</button>
-        ${empleados.map(e=>`<button onclick="setVentasFiltro('${e.replace(/'/g,"\\'")}')" style="${bstyle(ventasFiltro===e)}">${e}</button>`).join('')}
-      </div>`;
-    } else { fb.innerHTML=''; }
+    const bstyle=(active)=>`padding:5px 12px;border-radius:8px;border:1px solid ${active?'#1D9E75':'#ddd'};background:${active?'#E1F5EE':'transparent'};color:${active?'#085041':'#666'};font-size:12px;cursor:pointer;font-weight:${active?600:400}`;
+    const MESES=['’','’','’','’','’','’','’','’','’','’','’','’'];
+    const NM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const fmtMes=ym=>{const[y,m]=ym.split('-');return NM[parseInt(m)-1]+' '+y;};
+    const mesBar=allMonths.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-bottom:6px">
+      <span style="font-size:12px;color:#666;font-weight:600">Mes:</span>
+      <button onclick="setVentasMesFiltro(null)" style="${bstyle(!ventasMesFiltro)}">Hoy</button>
+      ${allMonths.map(m=>`<button onclick="setVentasMesFiltro('${m}')" style="${bstyle(ventasMesFiltro===m)}">${fmtMes(m)}</button>`).join('')}
+    </div>`:'';
+    const empleados=[...new Set(pool.map(v=>v.cobradoPor).filter(e=>e&&e!=="&mdash;"))];
+    const empBar=empleados.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-bottom:8px">
+      <span style="font-size:12px;color:#666;font-weight:600">Empleado:</span>
+      <button onclick="setVentasFiltro(null)" style="${bstyle(!ventasFiltro)}">Todos</button>
+      ${empleados.map(e=>`<button onclick="setVentasFiltro('${e.replace(/'/g,"\\'")}')" style="${bstyle(ventasFiltro===e)}">${e}</button>`).join('')}
+    </div>`:'';
+    fb.innerHTML=mesBar+empBar;
   }
-  // Apply filter
-  const vf=ventasFiltro?ventas.filter(v=>v.cobradoPor===ventasFiltro):ventas;
+  const vf=ventasFiltro?pool.filter(v=>v.cobradoPor===ventasFiltro):pool;
   const ef=vf.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
   const tc=vf.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
   const si=vf.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
   const dv=vf.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
+  const NM2=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const label=ventasMesFiltro?('de '+NM2[parseInt(ventasMesFiltro.split('-')[1])-1]+' '+ventasMesFiltro.split('-')[0]):(ventasFiltro?' ('+ventasFiltro+')':' de hoy');
   document.getElementById("ventasMetrics").innerHTML=`
-    <div class="metric"><div class="metric-lbl">Total${ventasFiltro?' ('+ventasFiltro+')':' del dia'}</div><div class="metric-val">${fmt(ef+tc+si+dv)}</div></div>
+    <div class="metric"><div class="metric-lbl">Total ${label}</div><div class="metric-val">${fmt(ef+tc+si+dv)}</div></div>
     <div class="metric"><div class="metric-lbl">Efectivo</div><div class="metric-val">${fmt(ef)}</div></div>
     <div class="metric"><div class="metric-lbl">Tarjeta</div><div class="metric-val">${fmt(tc)}</div></div>
     <div class="metric"><div class="metric-lbl">SINPE</div><div class="metric-val">${fmt(si)}</div></div>
     <div class="metric"><div class="metric-lbl">Dividido</div><div class="metric-val">${fmt(dv)}</div></div>`;
   const tbody=document.getElementById("ventasTbody");
-  if(!vf.length){tbody.innerHTML=`<tr><td colspan="7" class="empty">${ventas.length?'Sin ventas para '+ventasFiltro:'Sin ventas aun hoy'}</td></tr>`;return;}
+  if(!vf.length){tbody.innerHTML=`<tr><td colspan="9" class="empty">${pool.length===0&&!ventasFiltro?(ventas.length?'Sin ventas para este mes':'Sin ventas registradas'):'Sin ventas para este filtro'}</td></tr>`;return;}
   tbody.innerHTML=vf.map(v=>{
     const badge=v.metodo==="Efectivo"?"bg-ef":v.metodo==="Tarjeta"?"bg-tc":v.metodo==="SINPE"?"bg-si":"bg-div";
-    const ic={Efectivo:"\uD83D\uDCB5",Tarjeta:"\uD83D\uDCB3",SINPE:"\uD83D\uDCF1"};
+    const ic={Efectivo:"💵",Tarjeta:"💳",SINPE:"📱"};
     const extra=v.pagos?`<div style="font-size:10px;color:#888;margin-top:2px">${v.pagos.map(p=>`${ic[p.method]||""}${fmt(p.amount)}`).join(" + ")}</div>`:"";
     const descBadge=v.descMonto>0?`<div style="font-size:10px;color:#E24B4A">desc. ${fmt(v.descMonto)}</div>`:"";
-    return`<tr><td>${v.hora}</td><td>${v.mesa}</td><td><span class="badge ${badge}">${v.metodo}</span>${extra}</td><td>${v.cobradoPor||"&mdash;"}</td><td>${fmt(v.recibido)}</td><td>${v.vuelto>0?fmt(v.vuelto):"&mdash;"}</td><td><strong>${fmt(v.total)}</strong>${descBadge}</td></tr>`;
+    const vi=ventas.indexOf(v);
+    return`<tr><td style="font-size:11px;color:#888">${v.fecha||'&mdash;'}</td><td>${v.hora}</td><td>${v.mesa}</td><td><span class="badge ${badge}">${v.metodo}</span>${extra}</td><td>${v.cobradoPor||"&mdash;"}</td><td>${fmt(v.recibido)}</td><td>${v.vuelto>0?fmt(v.vuelto):"&mdash;"}</td><td><strong>${fmt(v.total)}</strong>${descBadge}</td><td><button onclick="reprintComanda(ventas[${vi}])" title="Reimprimir comanda" style="background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">🖨</button></td></tr>`;
   }).join("");
 }
 
@@ -1060,7 +1084,7 @@ function addGasto(){
   const desc=document.getElementById("gDesc").value.trim();const monto=parseInt(document.getElementById("gMonto").value);
   if(!desc||!monto){toast("Completa descripcion y monto");return;}
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  gastos.push({hora:hm,desc,monto,tipo:gastoTipo});
+  gastos.push({hora:hm,fecha:now.toISOString().slice(0,10),desc,monto,tipo:gastoTipo});
   document.getElementById("gDesc").value="";document.getElementById("gMonto").value="";
   saveLS();renderGastos();toast("Gasto registrado");
 }
@@ -1103,7 +1127,17 @@ function renderCierre(){
     desgEl.innerHTML=html;
   } else {desgEl.innerHTML=`<div class="card"><div class="empty">Sin movimientos de efectivo registrados hoy</div></div>`;}
   const hist=document.getElementById("cierreHistorial");
-  hist.innerHTML=cierres.length?`<div class="section-title" style="margin-bottom:10px">Cierres anteriores</div>`+cierres.map(c=>`<div class="card"><div style="font-size:12px;color:#666;margin-bottom:5px">${c.fecha}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;font-size:13px"><div><span style="color:#666">Total ventas:</span> <strong>${fmt(c.totalVentas)}</strong></div><div><span style="color:#666">Efectivo neto:</span> <strong>${fmt(c.efectivoCaja)}</strong></div><div><span style="color:#666">Ordenes:</span> <strong>${c.numVentas}</strong></div></div></div>`).join(""):"";
+  hist.innerHTML=cierres.length?`<div class="section-title" style="margin-bottom:10px">&#128198; Cierres anteriores</div>`+cierres.map(c=>`<div class="card" style="margin-bottom:10px">
+    <div style="font-size:12px;font-weight:600;color:#085041;margin-bottom:8px;text-transform:capitalize">${c.fecha}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;font-size:13px">
+      <div style="background:#f5f5f5;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#888;margin-bottom:2px">Total ventas</div><strong style="font-size:14px">${fmt(c.totalVentas)}</strong></div>
+      <div style="background:#E1F5EE;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#666;margin-bottom:2px">Efectivo neto</div><strong style="font-size:14px;color:#085041">${fmt(c.efectivoCaja)}</strong></div>
+      <div style="background:#f5f5f5;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#888;margin-bottom:2px">Ordenes</div><strong style="font-size:14px">${c.numVentas}</strong></div>
+      ${c.ef!=null?`<div style="background:#FAEEDA;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#888;margin-bottom:2px">💵 Efectivo</div><strong>${fmt(c.ef)}</strong></div>`:''}
+      ${c.tc!=null?`<div style="background:#E6F1FB;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#888;margin-bottom:2px">💳 Tarjeta</div><strong>${fmt(c.tc)}</strong></div>`:''}
+      ${c.si!=null?`<div style="background:#EDE6FB;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#888;margin-bottom:2px">📱 SINPE</div><strong>${fmt(c.si)}</strong></div>`:''}
+    </div>
+  </div>`).join(""):"";
 }
 function hacerCierre(){
   if(!ventas.length){toast("No hay ventas para cerrar");return;}
@@ -1113,7 +1147,7 @@ function hacerCierre(){
   const si=ventas.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
   const gastoCaja=gastos.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
   const d=new Date();
-  cierres.unshift({fecha:d.toLocaleDateString("es-CR",{weekday:"long",year:"numeric",month:"long",day:"numeric"})+" &mdash; "+d.toLocaleTimeString("es-CR",{hour:"2-digit",minute:"2-digit"}),totalVentas:ef+tc+si,efectivoCaja:ef-gastoCaja,ef,tc,si,gastoCaja,numVentas:ventas.length});
+  cierres.unshift({fecha:d.toLocaleDateString("es-CR",{weekday:"long",year:"numeric",month:"long",day:"numeric"})+" &mdash; "+d.toLocaleTimeString("es-CR",{hour:"2-digit",minute:"2-digit"}),fechaISO:d.toISOString().slice(0,10),totalVentas:ef+tc+si,efectivoCaja:ef-gastoCaja,ef,tc,si,gastoCaja,numVentas:ventas.length});
   ventas=[];gastos=[];cajaBilletes={};ventasFiltro=null;saveLS();toast("\u2713 Cierre realizado exitosamente");renderCierre();
 }
 
@@ -1410,6 +1444,11 @@ function renderTicketPreview(){
 
 /* ── LOCAL STORAGE ── */
 function saveLS(){
+  // 6-month auto-purge
+  const _cutoff=new Date();_cutoff.setMonth(_cutoff.getMonth()-6);const _co=_cutoff.toISOString().slice(0,10);
+  ventas=ventas.filter(v=>!v.fecha||v.fecha>=_co);
+  gastos=gastos.filter(g=>!g.fecha||g.fecha>=_co);
+  cierres=cierres.filter(c=>!c.fechaISO||c.fechaISO>=_co);
   try{
     localStorage.setItem('rpos_users',JSON.stringify(users));
     localStorage.setItem('rpos_menu',JSON.stringify(menu));
