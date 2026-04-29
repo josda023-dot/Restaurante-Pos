@@ -1655,26 +1655,30 @@ function loadLS(){
 function renderMesasAdmin(){
   const list=document.getElementById("mesasAdminList");if(!list)return;
   if(!mesas.length){list.innerHTML='<div class="empty">No hay mesas configuradas</div>';return;}
-  list.innerHTML=mesas.map((m,i)=>`
-    <div style="display:grid;grid-template-columns:50px 1fr auto;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0"
-      draggable="true"
-      ondragstart="mesasDragIdx=${i};event.dataTransfer.effectAllowed='move'"
-      ondragover="event.preventDefault();this.style.background='#f0faf5'"
-      ondragleave="this.style.background=''"
-      ondrop="event.preventDefault();this.style.background='';adminDropMesa(${i})">
-      <input type="text" value="${mesasEmojis[m]||getMesaEmoji(m)}" placeholder="🍽️"
-        style="border:1px solid #ddd;border-radius:6px;padding:6px;font-size:18px;text-align:center;width:44px;cursor:grab"
-        onchange="mesasEmojis['${m.replace(/'/g,"\\'")}']=(this.value.trim()||getMesaEmoji('${m.replace(/'/g,"\\'")}'));saveLS();renderSalon()">
-      <input type="text" value="${m}"
-        style="border:1px solid #ddd;border-radius:8px;padding:8px;font-size:14px;width:100%"
-        onblur="renombrarMesaAdmin(${i},this.value)"
-        onkeydown="if(event.key==='Enter')this.blur()">
-      <div style="display:flex;gap:4px">
-        <button onclick="moverMesaAdmin(${i},-1)" ${i===0?"disabled":""} style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;background:#f5f5f0;cursor:pointer;font-size:13px">↑</button>
-        <button onclick="moverMesaAdmin(${i},1)" ${i===mesas.length-1?"disabled":""} style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;background:#f5f5f0;cursor:pointer;font-size:13px">↓</button>
-        <button onclick="eliminarMesaAdmin(${i})" style="padding:5px 8px;border:none;border-radius:6px;background:#fee;color:#c0392b;cursor:pointer;font-size:13px;font-weight:600">&times;</button>
-      </div>
-    </div>`).join("");
+  let html='';
+  mesas.forEach(function(m,i){
+    const em=mesasEmojis[m]||getMesaEmoji(m);
+    const isFirst=i===0;const isLast=i===mesas.length-1;
+    html+='<div style="display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0" draggable="true"'+
+      ' ondragstart="mesasDragIdx='+i+';event.dataTransfer.effectAllowed=\'move\'"'+
+      ' ondragover="event.preventDefault();this.style.background=\'#f0faf5\'"'+
+      ' ondragleave="this.style.background=\'\'"'+
+      ' ondrop="event.preventDefault();this.style.background=\'\';adminDropMesa('+i+')">'+
+      '<input id="ci-em-'+i+'" type="text" value="'+em+'"'+
+        ' style="border:1px solid #ddd;border-radius:6px;padding:6px;font-size:18px;text-align:center;width:46px;cursor:grab"'+
+        ' onchange="mesasEmojis[mesas['+i+']]=(this.value.trim()||\'🍽️\');saveLS();renderSalon()">'+
+      '<input id="ci-nm-'+i+'" type="text" value="'+m.replace(/"/g,'&quot;')+'"'+
+        ' style="border:1px solid #ddd;border-radius:8px;padding:8px;font-size:14px;width:100%"'+
+        ' onblur="renombrarMesaAdmin('+i+',this.value)"'+
+        ' onkeydown="if(event.key===\'Enter\')this.blur()">'+
+      '<div style="display:flex;gap:4px">'+
+        '<button onclick="moverMesaAdmin('+i+',-1)" '+(isFirst?'disabled':'')+' style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;background:#f5f5f0;cursor:pointer;font-size:13px">↑</button>'+
+        '<button onclick="moverMesaAdmin('+i+',1)" '+(isLast?'disabled':'')+' style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;background:#f5f5f0;cursor:pointer;font-size:13px">↓</button>'+
+        '<button onclick="eliminarMesaAdmin('+i+')" style="padding:5px 8px;border:none;border-radius:6px;background:#fee;color:#c0392b;cursor:pointer;font-size:13px;font-weight:600">&times;</button>'+
+      '</div>'+
+    '</div>';
+  });
+  list.innerHTML=html;
 }
 function adminDropMesa(toIdx){
   if(mesasDragIdx===null||mesasDragIdx===toIdx)return;
