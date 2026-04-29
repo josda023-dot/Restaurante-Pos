@@ -255,18 +255,9 @@ body{background:#f5f5f0;min-height:100vh}
 <div class="screen" id="screen-cierre">
   <div style="max-width:620px">
     <div class="section-title" style="margin-bottom:14px">Cierre del dia</div>
-    <div class="card" style="margin-bottom:12px" id="cajainicialCard">
-      <div style="font-size:13px;font-weight:600;color:#333;margin-bottom:10px">&#128176; Caja inicial del dia</div>
-      <div id="cajainicialGrid"></div>
-      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:#085041;border-top:2px solid #1D9E75;padding-top:10px;margin-top:6px">
-        <span>Total caja inicial:</span><span id="cajainicialTotal">&#8353; 0</span>
-      </div>
-    </div>
     <div class="cierre-box" id="cierreBox"></div>
     <div id="cierreDesglose" style="margin-top:14px"></div>
-    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-green" onclick="hacerCierre()">&#10003; Confirmar cierre</button>
-    </div>
+    <div style="margin-top:16px"><button class="btn-green" onclick="hacerCierre()">Confirmar cierre</button></div>
     <div id="cierreHistorial" style="margin-top:20px"></div>
   </div>
 </div>
@@ -367,10 +358,10 @@ try{
 }catch(e){console.warn('Firebase no disponible, modo offline:',e.message);}
 const SCREEN_LABELS={salon:"Salon",ventas:"Ventas",gastos:"Gastos",cierre:"Cierre","menu-admin":"Menu",usuarios:"Usuarios"};
 const DENOMINACIONES=[
-  {val:50000,lbl:"Billete"},{val:20000,lbl:"Billete"},{val:10000,lbl:"Billete"},
+  {val:20000,lbl:"Billete"},{val:10000,lbl:"Billete"},
   {val:5000,lbl:"Billete"},{val:2000,lbl:"Billete"},{val:1000,lbl:"Billete"},
   {val:500,lbl:"Moneda"},{val:100,lbl:"Moneda"},{val:50,lbl:"Moneda"},
-  {val:25,lbl:"Moneda"},{val:10,lbl:"Moneda"},{val:5,lbl:"Moneda"},
+  {val:25,lbl:"Moneda"},
 ];
 const GASTO_TIPOS={caja:{lbl:"Efectivo caja",cls:"bg-ef",btnCls:"caja"},fuerte:{lbl:"Caja fuerte",cls:"bg-cf",btnCls:"fuerte"},sinpe:{lbl:"SINPE",cls:"bg-si",btnCls:"sinpe"},transf:{lbl:"Transferencia",cls:"bg-tr",btnCls:"transf"}};
 
@@ -1168,7 +1159,7 @@ function renderCierre(){
     <div class="cierre-row"><span>Gastos transferencia</span><span>${fmt(gastoTransf)}</span></div>
     <div class="cierre-row"><span>Total ventas brutas</span><span>${fmt(ef+tc+si+dv)}</span></div>
     <div class="cierre-row"><span>Efectivo neto en caja</span><span style="color:#085041">${fmt(ef-gastoCaja)}</span></div>
-    ${totalCajainicial()>0?`<div class="cierre-row" style="color:#085041;font-weight:600"><span>&#128176; Caja inicial</span><span>${fmt(totalCajainicial())}</span></div><div class="cierre-row" style="font-weight:700;border-top:2px solid #085041;margin-top:4px;padding-top:8px;color:#085041"><span>Efectivo a guardar</span><span>${fmt(Math.max(0,ef-gastoCaja-totalCajainicial()))}</span></div>`:''}
+    
     `;
   const desgEl=document.getElementById("cierreDesglose");
   const denom=DENOMINACIONES.filter(d=>cajaBilletes[d.val]>0);
@@ -1191,6 +1182,7 @@ function renderCierre(){
       ${c.ef!=null?`<div style="background:#FAEEDA;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#888;margin-bottom:2px">💵 Efectivo</div><strong>${fmt(c.ef)}</strong></div>`:''}
       ${c.tc!=null?`<div style="background:#E6F1FB;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#888;margin-bottom:2px">💳 Tarjeta</div><strong>${fmt(c.tc)}</strong></div>`:''}
       ${c.si!=null?`<div style="background:#EDE6FB;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#888;margin-bottom:2px">📱 SINPE</div><strong>${fmt(c.si)}</strong></div>`:''}
+      ${c.cajainicial?`<div style="background:#E1F5EE;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#666;margin-bottom:2px">💰 Caja inicial sig. día</div><strong style="color:#085041">${fmt(c.cajainicial)}</strong></div>`:''}
     </div>
   </div>`).join(""):"";
 }
@@ -1211,7 +1203,52 @@ function hacerCierre(){
   cierres.unshift(cierreData);
   printCierreReport(cierreData);
   ventas=[];gastos=[];cajaBilletes={};cajainicialBilletes={};ventasFiltro=null;
-  saveLS();toast("\u2713 Cierre realizado — imprimiendo reporte");renderCierre();
+  saveLS();renderCierre();
+  toast("\u2713 Cierre realizado exitosamente");
+  setTimeout(()=>showCajaInicialModal(),600);
+}
+function showCajaInicialModal(){
+  const old=document.getElementById("cajaInicialModal");if(old)old.remove();
+  cajainicialBilletes={};
+  const billetes=DENOMINACIONES.filter(d=>d.val>=1000);
+  const monedas=DENOMINACIONES.filter(d=>d.val<1000);
+  const mkRow=d=>{const esB=d.val>=1000;
+    return`<div style="display:grid;grid-template-columns:90px 80px 1fr;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0">
+      <div style="background:${esB?"#FAEEDA":"#E6F1FB"};border-radius:6px;padding:5px 8px;text-align:center">
+        <div style="font-size:13px;font-weight:700;color:${esB?"#633806":"#0C447C"}">${fmt(d.val)}</div>
+        <div style="font-size:10px;color:${esB?"#854F0B":"#185FA5"}">${d.lbl}</div>
+      </div>
+      <input type="number" min="0" placeholder="0" id="ci_${d.val}"
+        style="border:1px solid #ddd;border-radius:8px;padding:7px;font-size:15px;text-align:center;width:100%"
+        oninput="setCajainicialDenom(${d.val},this.value)">
+      <span style="font-size:12px;color:#888">unidades</span>
+    </div>`;};
+  const div=document.createElement("div");div.id="cajaInicialModal";
+  div.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px";
+  div.innerHTML=`<div style="background:#fff;border-radius:14px;padding:24px;max-width:400px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+    <div style="font-size:17px;font-weight:700;color:#111;margin-bottom:4px">&#128176; Caja inicial para ma&#241;ana</div>
+    <div style="font-size:12px;color:#888;margin-bottom:16px">Cuantos billetes y monedas va a tener la caja al abrir</div>
+    <div style="font-size:10px;font-weight:700;color:#999;margin-bottom:4px;letter-spacing:.5px">BILLETES</div>
+    ${billetes.map(mkRow).join("")}
+    <div style="font-size:10px;font-weight:700;color:#999;margin-top:12px;margin-bottom:4px;letter-spacing:.5px">MONEDAS</div>
+    ${monedas.map(mkRow).join("")}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:14px;border-top:2px solid #1D9E75">
+      <div style="font-size:15px;font-weight:700;color:#085041">Total: <span id="ciModalTotal">&#8353; 0</span></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('cajaInicialModal').remove()"
+          style="padding:10px 14px;border-radius:8px;border:1px solid #ddd;background:#f5f5f0;font-size:13px;cursor:pointer">Omitir</button>
+        <button onclick="guardarCajaInicial()"
+          style="padding:10px 20px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:14px;font-weight:600;cursor:pointer">&#10003; Guardar</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+}
+function guardarCajaInicial(){
+  saveLS();
+  document.getElementById("cajaInicialModal").remove();
+  toast("&#128176; Caja inicial: "+fmt(totalCajainicial()));
+  renderCierre();
 }
 function printCierreReport(c){
   const w=window.open('','_blank','width=500,height=800');
