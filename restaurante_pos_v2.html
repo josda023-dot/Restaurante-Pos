@@ -541,6 +541,8 @@ let menu=[
 ];
 let nextMid=158,nextVid=1,nextUid=3;
 let mesas=["Mesa 1","Mesa 2","Mesa 3","Mesa 4","Mesa 5","Mesa 6","Mesa 7","Mesa 8","Para llevar","Barra"];
+let mesasEmojis={"Para llevar":"🥡","Barra":"🪑"};
+let mesasDragIdx=null;
 let orders={},ventas=[],gastos=[],cierres=[];
 let users=[
   {id:1,name:"Carlos Mora",role:"admin",pin:"1234",allowedScreens:[...ALL_SCREENS]},
@@ -636,10 +638,11 @@ function goScreen(s){
   if(s==="usuarios")renderUsers();
 }
 function setMenuTab(t){
-  ["platillos","categorias","tiquete"].forEach(x=>{document.getElementById("mtab-"+x).classList.toggle("active",x===t);document.getElementById("mpanel-"+x).style.display=x===t?"block":"none";});
+  ["platillos","categorias","tiquete","mesas"].forEach(x=>{const b=document.getElementById("mtab-"+x);const p=document.getElementById("mpanel-"+x);if(b)b.classList.toggle("active",x===t);if(p)p.style.display=x===t?"block":"none";});
   if(t==="platillos")renderMenuAdmin();
   if(t==="categorias")renderCatAdmin();
   if(t==="tiquete")renderTicketConfig();
+  if(t==="mesas")renderMesasAdmin();
 }
 
 /* ── SALON ── */
@@ -1608,6 +1611,8 @@ function saveLS(){
     localStorage.setItem('rpos_nextVid',nextVid);
     localStorage.setItem('rpos_nextUid',nextUid);
     localStorage.setItem('rpos_ticketConfig',JSON.stringify(ticketConfig));
+    localStorage.setItem('rpos_mesas',JSON.stringify(mesas));
+    localStorage.setItem('rpos_mesasEmojis',JSON.stringify(mesasEmojis));
   }catch(e){}
   try{fbOrders.set(orders);}catch(e){}
 }
@@ -1626,9 +1631,85 @@ function loadLS(){
     const nvi=localStorage.getItem('rpos_nextVid');if(nvi)nextVid=parseInt(nvi);
     const nui=localStorage.getItem('rpos_nextUid');if(nui)nextUid=parseInt(nui);
     const tc=localStorage.getItem('rpos_ticketConfig');if(tc)ticketConfig={...ticketConfig,...JSON.parse(tc)};
+    const ms=localStorage.getItem('rpos_mesas');if(ms)mesas=JSON.parse(ms);
+    const me=localStorage.getItem('rpos_mesasEmojis');if(me)mesasEmojis=JSON.parse(me);
   }catch(e){}
 }
 
+/* ── MESAS ADMIN ── */
+function renderMesasAdmin(){
+  const list=document.getElementById("mesasAdminList");if(!list)return;
+  if(!mesas.length){list.innerHTML='<div class="empty">No hay mesas configuradas</div>';return;}
+  list.innerHTML=mesas.map((m,i)=>`
+    <div style="display:grid;grid-template-columns:50px 1fr auto;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0"
+      draggable="true"
+      ondragstart="mesasDragIdx=${i};event.dataTransfer.effectAllowed='move'"
+      ondragover="event.preventDefault();this.style.background='#f0faf5'"
+      ondragleave="this.style.background=''"
+      ondrop="event.preventDefault();this.style.background='';adminDropMesa(${i})">
+      <input type="text" value="${mesasEmojis[m]||getMesaEmoji(m)}" placeholder="🍽️"
+        style="border:1px solid #ddd;border-radius:6px;padding:6px;font-size:18px;text-align:center;width:44px;cursor:grab"
+        onchange="mesasEmojis['${m.replace(/'/g,"\\'")}']=(this.value.trim()||getMesaEmoji('${m.replace(/'/g,"\\'")}'));saveLS();renderSalon()">
+      <input type="text" value="${m}"
+        style="border:1px solid #ddd;border-radius:8px;padding:8px;font-size:14px;width:100%"
+        onblur="renombrarMesaAdmin(${i},this.value)"
+        onkeydown="if(event.key==='Enter')this.blur()">
+      <div style="display:flex;gap:4px">
+        <button onclick="moverMesaAdmin(${i},-1)" ${i===0?"disabled":""} style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;background:#f5f5f0;cursor:pointer;font-size:13px">↑</button>
+        <button onclick="moverMesaAdmin(${i},1)" ${i===mesas.length-1?"disabled":""} style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;background:#f5f5f0;cursor:pointer;font-size:13px">↓</button>
+        <button onclick="eliminarMesaAdmin(${i})" style="padding:5px 8px;border:none;border-radius:6px;background:#fee;color:#c0392b;cursor:pointer;font-size:13px;font-weight:600">&times;</button>
+      </div>
+    </div>`).join("");
+}
+function adminDropMesa(toIdx){
+  if(mesasDragIdx===null||mesasDragIdx===toIdx)return;
+  const moved=mesas.splice(mesasDragIdx,1)[0];
+  mesas.splice(toIdx,0,moved);
+  mesasDragIdx=null;
+  saveLS();renderMesasAdmin();renderSalon();
+}
+function agregarMesaAdmin(){
+  const nm=document.getElementById("ma-mesa-nombre").value.trim();
+  if(!nm){toast("Ingresa un nombre para la mesa");return;}
+  if(mesas.includes(nm)){toast("Ya existe una mesa con ese nombre");return;}
+  const em=document.getElementById("ma-mesa-emoji").value.trim();
+  mesas.push(nm);
+  if(em)mesasEmojis[nm]=em;
+  document.getElementById("ma-mesa-nombre").value="";
+  document.getElementById("ma-mesa-emoji").value="";
+  saveLS();renderMesasAdmin();renderSalon();
+  toast("✓ Mesa '"+nm+"' agregada");
+}
+function renombrarMesaAdmin(idx,nuevoNombre){
+  nuevoNombre=nuevoNombre.trim();
+  if(!nuevoNombre)return;
+  const viejo=mesas[idx];
+  if(viejo===nuevoNombre)return;
+  if(mesas.includes(nuevoNombre)){toast("Ya existe una mesa con ese nombre");renderMesasAdmin();return;}
+  // rename in orders too
+  if(orders[viejo]){orders[nuevoNombre]=orders[viejo];delete orders[viejo];}
+  if(mesasEmojis[viejo]){mesasEmojis[nuevoNombre]=mesasEmojis[viejo];delete mesasEmojis[viejo];}
+  mesas[idx]=nuevoNombre;
+  saveLS();renderMesasAdmin();renderSalon();
+  toast("✓ Renombrado a '"+nuevoNombre+"'");
+}
+function eliminarMesaAdmin(idx){
+  const m=mesas[idx];
+  const ord=orders[m];
+  if(ord&&ord.items&&ord.items.length>0){toast("⚠️ '"+m+"' tiene una orden abierta");return;}
+  if(!confirm("Eliminar '"+m+"'?"))return;
+  mesas.splice(idx,1);
+  delete orders[m];
+  delete mesasEmojis[m];
+  saveLS();renderMesasAdmin();renderSalon();
+  toast("Mesa eliminada");
+}
+function moverMesaAdmin(idx,dir){
+  const ni=idx+dir;
+  if(ni<0||ni>=mesas.length)return;
+  [mesas[idx],mesas[ni]]=[mesas[ni],mesas[idx]];
+  saveLS();renderMesasAdmin();renderSalon();
+}
 /* ── COMANDA (TABLET) ── */
 function enviarACocina(){
   const ord=orders[activeMesa];
