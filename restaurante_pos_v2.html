@@ -255,9 +255,18 @@ body{background:#f5f5f0;min-height:100vh}
 <div class="screen" id="screen-cierre">
   <div style="max-width:620px">
     <div class="section-title" style="margin-bottom:14px">Cierre del dia</div>
+    <div class="card" style="margin-bottom:12px" id="cajainicialCard">
+      <div style="font-size:13px;font-weight:600;color:#333;margin-bottom:10px">&#128176; Caja inicial del dia</div>
+      <div id="cajainicialGrid"></div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:#085041;border-top:2px solid #1D9E75;padding-top:10px;margin-top:6px">
+        <span>Total caja inicial:</span><span id="cajainicialTotal">&#8353; 0</span>
+      </div>
+    </div>
     <div class="cierre-box" id="cierreBox"></div>
     <div id="cierreDesglose" style="margin-top:14px"></div>
-    <div style="margin-top:16px"><button class="btn-green" onclick="hacerCierre()">Confirmar cierre</button></div>
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-green" onclick="hacerCierre()">&#10003; Confirmar cierre</button>
+    </div>
     <div id="cierreHistorial" style="margin-top:20px"></div>
   </div>
 </div>
@@ -345,14 +354,17 @@ const ALL_SCREENS=["salon","ventas","gastos","cierre","menu-admin","usuarios"];
 /* ── FIREBASE + TABLET MODE ── */
 const TABLET_MODE=new URLSearchParams(window.location.search).get('tablet')==='1';
 const FB_CONFIG={apiKey:"AIzaSyAW4J1KkZMdKfiJVka7s3PjymoyyykfINI",authDomain:"pos-tucan.firebaseapp.com",databaseURL:"https://pos-tucan-default-rtdb.firebaseio.com",projectId:"pos-tucan",storageBucket:"pos-tucan.firebasestorage.app",messagingSenderId:"271965578160",appId:"1:271965578160:web:5577bfe487ed2bf208ac75"};
-firebase.initializeApp(FB_CONFIG);
-const fbOrders=firebase.database().ref('pos_orders');
-fbOrders.on('value',snap=>{
-  const d=snap.val()||{};
-  Object.keys(d).forEach(m=>{if(d[m]&&Array.isArray(d[m].items))orders[m]=d[m];});
-  renderSalon();
-  if(activeMesa&&document.getElementById('mesaModal'))renderMesaModal();
-});
+let fbOrders={set:()=>{},on:()=>{}};// fallback stub
+try{
+  firebase.initializeApp(FB_CONFIG);
+  fbOrders=firebase.database().ref('pos_orders');
+  fbOrders.on('value',snap=>{
+    const d=snap.val()||{};
+    Object.keys(d).forEach(m=>{if(d[m]&&Array.isArray(d[m].items))orders[m]=d[m];});
+    renderSalon();
+    if(activeMesa&&document.getElementById('mesaModal'))renderMesaModal();
+  });
+}catch(e){console.warn('Firebase no disponible, modo offline:',e.message);}
 const SCREEN_LABELS={salon:"Salon",ventas:"Ventas",gastos:"Gastos",cierre:"Cierre","menu-admin":"Menu",usuarios:"Usuarios"};
 const DENOMINACIONES=[
   {val:50000,lbl:"Billete"},{val:20000,lbl:"Billete"},{val:10000,lbl:"Billete"},
@@ -545,6 +557,7 @@ let users=[
 ];
 let activeCat=cats[0],activeMesa=null,payMethod=null,gastoTipo="caja";
 let efBilletes={},cajaBilletes={};
+let cajainicialBilletes={};  // denomination counts for initial cash
 let activeUser=null,pendingLoginId=null,loginPinStr="",pinCobroCb=null,pinCobroStr="",pinCobroUserId=null;
 let splitGroups=[],splitAssignment={},nextGroupId=1;
 let descuento={tipo:'pct',valor:0};
@@ -552,6 +565,7 @@ let cobraItbis=true,cobraServicio=false;
 let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false};
 let ventasFiltro=null;
 let ventasMesFiltro=null;
+let ventasDiaFiltro=null;
 let menuAdminCatFiltro=null;
 let cambiarPinState={uid:null,phase:'current',str:'',newPin:''};
 
@@ -1018,48 +1032,55 @@ function showResultadoSplit(pagos,cobradoPor,total){
 
 /* ── VENTAS ── */
 function setVentasFiltro(emp){ventasFiltro=emp;renderVentas();}
-function setVentasMesFiltro(m){ventasMesFiltro=m;ventasFiltro=null;renderVentas();}
-function reprintComanda(v){
-  const ord={items:v.items};
-  const w=window.open('','_blank','width=420,height=700');
-  if(!w){toast('⚠️ Permitié ventanas emergentes para imprimir');return;}
-  w.document.write(buildComandaHTML(v.mesa,ord));
-  w.document.close();
-  setTimeout(()=>w.print(),800);
+function setVentasMesFiltro(m){ventasMesFiltro=m;ventasDiaFiltro=null;ventasFiltro=null;renderVentas();}
+function setVentasDiaFiltro(d){ventasDiaFiltro=d;ventasFiltro=null;renderVentas();}
+function reprintTiquete(v){
+  const w=window.open('','_blank','width=420,height=650');
+  if(!w){toast('Permite ventanas emergentes para imprimir');return;}
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tiquete</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Courier New",Courier,monospace;font-size:12px;padding:16px;max-width:300px;line-height:1.65;color:#111}.ticket-center{text-align:center}.ticket-row{display:flex;justify-content:space-between;gap:6px}.ticket-row span:last-child{white-space:nowrap}.ticket-bold{display:flex;justify-content:space-between;font-weight:700;font-size:13px;gap:6px}.ticket-hr-solid{border:none;border-top:1px solid #555;margin:5px 0}.ticket-hr-dash{border:none;border-top:1px dashed #999;margin:5px 0}.ticket-vuelto{display:flex;justify-content:space-between;font-weight:700;padding:2px 0}@media print{body{padding:4px}}</style></head><body>'+buildTicketHTML(v)+'</body></html>');
+  w.document.close();w.focus();
+  setTimeout(()=>{w.print();},400);
 }
 function renderVentas(){
   const today=new Date().toISOString().slice(0,10);
-  // Collect all months available in ventas (for history browsing)
+  const NM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const fmtMes=ym=>{const[y,m]=ym.split('-');return NM[parseInt(m)-1]+' '+y;};
+  const fmtDia=d=>{const[,m,dd]=d.split('-');return dd+' '+NM[parseInt(m)-1];};
   const allMonths=[...new Set(ventas.map(v=>v.fecha?v.fecha.slice(0,7):null).filter(Boolean))].sort().reverse();
-  // Pool: if month filter active, show that month's ventas; otherwise show today's
-  const pool=ventasMesFiltro?ventas.filter(v=>v.fecha&&v.fecha.slice(0,7)===ventasMesFiltro):ventas.filter(v=>!v.fecha||v.fecha===today);
-  // Filter bar
+  const monthPool=ventasMesFiltro
+    ?ventas.filter(v=>v.fecha&&v.fecha.slice(0,7)===ventasMesFiltro)
+    :ventas.filter(v=>!v.fecha||v.fecha===today);
+  const allDays=ventasMesFiltro
+    ?[...new Set(monthPool.map(v=>v.fecha).filter(Boolean))].sort().reverse()
+    :[];
+  const pool=ventasDiaFiltro?monthPool.filter(v=>v.fecha===ventasDiaFiltro):monthPool;
   const fb=document.getElementById("ventasFiltroBar");
   if(fb){
-    const bstyle=(active)=>`padding:5px 12px;border-radius:8px;border:1px solid ${active?'#1D9E75':'#ddd'};background:${active?'#E1F5EE':'transparent'};color:${active?'#085041':'#666'};font-size:12px;cursor:pointer;font-weight:${active?600:400}`;
-    const MESES=['’','’','’','’','’','’','’','’','’','’','’','’'];
-    const NM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const fmtMes=ym=>{const[y,m]=ym.split('-');return NM[parseInt(m)-1]+' '+y;};
-    const mesBar=allMonths.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-bottom:6px">
-      <span style="font-size:12px;color:#666;font-weight:600">Mes:</span>
-      <button onclick="setVentasMesFiltro(null)" style="${bstyle(!ventasMesFiltro)}">Hoy</button>
-      ${allMonths.map(m=>`<button onclick="setVentasMesFiltro('${m}')" style="${bstyle(ventasMesFiltro===m)}">${fmtMes(m)}</button>`).join('')}
+    const bs=(active)=>`padding:5px 10px;border-radius:8px;border:1px solid ${active?'#1D9E75':'#ddd'};background:${active?'#E1F5EE':'transparent'};color:${active?'#085041':'#666'};font-size:12px;cursor:pointer;font-weight:${active?600:400}`;
+    const mesBar=allMonths.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-bottom:6px;border-bottom:1px solid #eee;margin-bottom:6px">
+      <span style="font-size:11px;color:#999;font-weight:600;min-width:30px">MES</span>
+      <button onclick="setVentasMesFiltro(null)" style="${bs(!ventasMesFiltro)}">Hoy</button>
+      ${allMonths.map(m=>`<button onclick="setVentasMesFiltro('${m}')" style="${bs(ventasMesFiltro===m)}">${fmtMes(m)}</button>`).join('')}
+    </div>`:'';
+    const diaBar=allDays.length>1?`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-bottom:6px;border-bottom:1px solid #eee;margin-bottom:6px">
+      <span style="font-size:11px;color:#999;font-weight:600;min-width:30px">DIA</span>
+      <button onclick="setVentasDiaFiltro(null)" style="${bs(!ventasDiaFiltro)}">Todo el mes</button>
+      ${allDays.map(d=>`<button onclick="setVentasDiaFiltro('${d}')" style="${bs(ventasDiaFiltro===d)}">${fmtDia(d)}</button>`).join('')}
     </div>`:'';
     const empleados=[...new Set(pool.map(v=>v.cobradoPor).filter(e=>e&&e!=="&mdash;"))];
-    const empBar=empleados.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-bottom:8px">
-      <span style="font-size:12px;color:#666;font-weight:600">Empleado:</span>
-      <button onclick="setVentasFiltro(null)" style="${bstyle(!ventasFiltro)}">Todos</button>
-      ${empleados.map(e=>`<button onclick="setVentasFiltro('${e.replace(/'/g,"\\'")}')" style="${bstyle(ventasFiltro===e)}">${e}</button>`).join('')}
+    const empBar=empleados.length>1?`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-bottom:6px">
+      <span style="font-size:11px;color:#999;font-weight:600;min-width:30px">EMP</span>
+      <button onclick="setVentasFiltro(null)" style="${bs(!ventasFiltro)}">Todos</button>
+      ${empleados.map(e=>`<button onclick="setVentasFiltro('${e.replace(/'/g,"\\'")}')" style="${bs(ventasFiltro===e)}">${e}</button>`).join('')}
     </div>`:'';
-    fb.innerHTML=mesBar+empBar;
+    fb.innerHTML=mesBar+diaBar+empBar;
   }
   const vf=ventasFiltro?pool.filter(v=>v.cobradoPor===ventasFiltro):pool;
   const ef=vf.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
   const tc=vf.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
   const si=vf.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
   const dv=vf.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
-  const NM2=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const label=ventasMesFiltro?('de '+NM2[parseInt(ventasMesFiltro.split('-')[1])-1]+' '+ventasMesFiltro.split('-')[0]):(ventasFiltro?' ('+ventasFiltro+')':' de hoy');
+  const label=ventasDiaFiltro?fmtDia(ventasDiaFiltro):(ventasMesFiltro?fmtMes(ventasMesFiltro):(ventasFiltro?'('+ventasFiltro+')':'de hoy'));
   document.getElementById("ventasMetrics").innerHTML=`
     <div class="metric"><div class="metric-lbl">Total ${label}</div><div class="metric-val">${fmt(ef+tc+si+dv)}</div></div>
     <div class="metric"><div class="metric-lbl">Efectivo</div><div class="metric-val">${fmt(ef)}</div></div>
@@ -1067,14 +1088,14 @@ function renderVentas(){
     <div class="metric"><div class="metric-lbl">SINPE</div><div class="metric-val">${fmt(si)}</div></div>
     <div class="metric"><div class="metric-lbl">Dividido</div><div class="metric-val">${fmt(dv)}</div></div>`;
   const tbody=document.getElementById("ventasTbody");
-  if(!vf.length){tbody.innerHTML=`<tr><td colspan="9" class="empty">${pool.length===0&&!ventasFiltro?(ventas.length?'Sin ventas para este mes':'Sin ventas registradas'):'Sin ventas para este filtro'}</td></tr>`;return;}
+  if(!vf.length){tbody.innerHTML=`<tr><td colspan="9" class="empty">Sin ventas para este filtro</td></tr>`;return;}
+  const ic={Efectivo:"💵",Tarjeta:"💳",SINPE:"📱"};
   tbody.innerHTML=vf.map(v=>{
     const badge=v.metodo==="Efectivo"?"bg-ef":v.metodo==="Tarjeta"?"bg-tc":v.metodo==="SINPE"?"bg-si":"bg-div";
-    const ic={Efectivo:"💵",Tarjeta:"💳",SINPE:"📱"};
     const extra=v.pagos?`<div style="font-size:10px;color:#888;margin-top:2px">${v.pagos.map(p=>`${ic[p.method]||""}${fmt(p.amount)}`).join(" + ")}</div>`:"";
     const descBadge=v.descMonto>0?`<div style="font-size:10px;color:#E24B4A">desc. ${fmt(v.descMonto)}</div>`:"";
     const vi=ventas.indexOf(v);
-    return`<tr><td style="font-size:11px;color:#888">${v.fecha||'&mdash;'}</td><td>${v.hora}</td><td>${v.mesa}</td><td><span class="badge ${badge}">${v.metodo}</span>${extra}</td><td>${v.cobradoPor||"&mdash;"}</td><td>${fmt(v.recibido)}</td><td>${v.vuelto>0?fmt(v.vuelto):"&mdash;"}</td><td><strong>${fmt(v.total)}</strong>${descBadge}</td><td><button onclick="reprintComanda(ventas[${vi}])" title="Reimprimir comanda" style="background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">🖨</button></td></tr>`;
+    return`<tr><td style="font-size:11px;color:#888">${v.fecha||'&mdash;'}</td><td>${v.hora}</td><td>${v.mesa}</td><td><span class="badge ${badge}">${v.metodo}</span>${extra}</td><td>${v.cobradoPor||"&mdash;"}</td><td>${fmt(v.recibido)}</td><td>${v.vuelto>0?fmt(v.vuelto):"&mdash;"}</td><td><strong>${fmt(v.total)}</strong>${descBadge}</td><td><button onclick="reprintTiquete(ventas[${vi}])" title="Reimprimir tiquete" style="background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">🖨</button></td></tr>`;
   }).join("");
 }
 
@@ -1095,7 +1116,39 @@ function renderGastos(){
 }
 
 /* ── CIERRE ── */
+function totalCajainicial(){return Object.entries(cajainicialBilletes).reduce((a,[v,c])=>a+parseInt(v)*c,0);}
+function setCajainicialDenom(val,qty){
+  const n=parseInt(qty)||0;
+  if(n<=0)delete cajainicialBilletes[val];else cajainicialBilletes[val]=n;
+  renderCajaInicialGrid();
+  renderCierre();
+}
+function renderCajaInicialGrid(){
+  const grid=document.getElementById("cajainicialGrid");
+  if(!grid)return;
+  const billetes=DENOMINACIONES.filter(d=>d.val>=1000);
+  const monedas=DENOMINACIONES.filter(d=>d.val<1000);
+  const row=d=>{const cnt=cajainicialBilletes[d.val]||"";const esB=d.val>=1000;const sub=cnt?(parseInt(cnt)*d.val):0;
+    return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0f0f0">
+      <div style="background:${esB?"#FAEEDA":"#E6F1FB"};border-radius:6px;padding:4px 8px;min-width:72px;text-align:center">
+        <div style="font-size:12px;font-weight:700;color:${esB?"#633806":"#0C447C"}">${fmt(d.val)}</div>
+        <div style="font-size:10px;color:${esB?"#854F0B":"#185FA5"}">${d.lbl}</div>
+      </div>
+      <input type="number" min="0" value="${cnt}" placeholder="0"
+        style="width:70px;border:1px solid #ddd;border-radius:6px;padding:5px 8px;font-size:13px;text-align:center"
+        oninput="setCajainicialDenom(${d.val},this.value)">
+      <span style="font-size:11px;color:#666;flex:1">× ${d.val>=1000?"billete":"moneda"} = </span>
+      <span style="font-size:13px;font-weight:600;color:#085041;min-width:75px;text-align:right">${sub>0?fmt(sub):"—"}</span>
+    </div>`;};
+  grid.innerHTML=`<div style="font-size:11px;font-weight:600;color:#999;margin-bottom:4px">BILLETES</div>`
+    +billetes.map(row).join("")
+    +`<div style="font-size:11px;font-weight:600;color:#999;margin-top:10px;margin-bottom:4px">MONEDAS</div>`
+    +monedas.map(row).join("");
+  const tot=document.getElementById("cajainicialTotal");
+  if(tot)tot.textContent=fmt(totalCajainicial());
+}
 function renderCierre(){
+  renderCajaInicialGrid();
   const ef=ventas.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
   const tc=ventas.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
   const si=ventas.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
@@ -1114,7 +1167,9 @@ function renderCierre(){
     <div class="cierre-row"><span>Gastos SINPE</span><span>${fmt(gastoSinpe)}</span></div>
     <div class="cierre-row"><span>Gastos transferencia</span><span>${fmt(gastoTransf)}</span></div>
     <div class="cierre-row"><span>Total ventas brutas</span><span>${fmt(ef+tc+si+dv)}</span></div>
-    <div class="cierre-row"><span>Efectivo neto en caja</span><span style="color:#085041">${fmt(ef-gastoCaja)}</span></div>`;
+    <div class="cierre-row"><span>Efectivo neto en caja</span><span style="color:#085041">${fmt(ef-gastoCaja)}</span></div>
+    ${totalCajainicial()>0?`<div class="cierre-row" style="color:#085041;font-weight:600"><span>&#128176; Caja inicial</span><span>${fmt(totalCajainicial())}</span></div><div class="cierre-row" style="font-weight:700;border-top:2px solid #085041;margin-top:4px;padding-top:8px;color:#085041"><span>Efectivo a guardar</span><span>${fmt(Math.max(0,ef-gastoCaja-totalCajainicial()))}</span></div>`:''}
+    `;
   const desgEl=document.getElementById("cierreDesglose");
   const denom=DENOMINACIONES.filter(d=>cajaBilletes[d.val]>0);
   if(denom.length){
@@ -1145,10 +1200,60 @@ function hacerCierre(){
   const ef=ventas.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
   const tc=ventas.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
   const si=ventas.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
+  const dv=ventas.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
   const gastoCaja=gastos.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
+  const gastoFuerte=gastos.filter(g=>g.tipo==="fuerte").reduce((a,g)=>a+g.monto,0);
+  const gastoSinpe=gastos.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
+  const gastoTransf=gastos.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
   const d=new Date();
-  cierres.unshift({fecha:d.toLocaleDateString("es-CR",{weekday:"long",year:"numeric",month:"long",day:"numeric"})+" &mdash; "+d.toLocaleTimeString("es-CR",{hour:"2-digit",minute:"2-digit"}),fechaISO:d.toISOString().slice(0,10),totalVentas:ef+tc+si,efectivoCaja:ef-gastoCaja,ef,tc,si,gastoCaja,numVentas:ventas.length});
-  ventas=[];gastos=[];cajaBilletes={};ventasFiltro=null;saveLS();toast("\u2713 Cierre realizado exitosamente");renderCierre();
+  const cajaIni=totalCajainicial();
+  const cierreData={fecha:d.toLocaleDateString("es-CR",{weekday:"long",year:"numeric",month:"long",day:"numeric"})+" &mdash; "+d.toLocaleTimeString("es-CR",{hour:"2-digit",minute:"2-digit"}),fechaISO:d.toISOString().slice(0,10),totalVentas:ef+tc+si+dv,efectivoCaja:ef-gastoCaja,ef,tc,si,dv,gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,numVentas:ventas.length,cajainicial:cajaIni,cajainicialBilletes:{...cajainicialBilletes},gastosList:[...gastos]};
+  cierres.unshift(cierreData);
+  printCierreReport(cierreData);
+  ventas=[];gastos=[];cajaBilletes={};cajainicialBilletes={};ventasFiltro=null;
+  saveLS();toast("\u2713 Cierre realizado — imprimiendo reporte");renderCierre();
+}
+function printCierreReport(c){
+  const w=window.open('','_blank','width=500,height=800');
+  if(!w)return;
+  const fmt2=n=>new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',minimumFractionDigits:0}).format(n);
+  const row=(l,r,bold)=>`<div style="display:flex;justify-content:space-between;padding:3px 0;${bold?'font-weight:700;border-top:1px solid #000;margin-top:4px':''}"><span>${l}</span><span>${r}</span></div>`;
+  let gasHtml='';
+  if(c.gastosList&&c.gastosList.length){
+    gasHtml='<div style="margin-top:8px;font-size:11px;color:#555;font-weight:600">GASTOS DEL DIA:</div>';
+    gasHtml+=c.gastosList.map(g=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span>${g.desc} (${g.tipo})</span><span>${fmt2(g.monto)}</span></div>`).join('');
+  }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{font-family:'Courier New',monospace;font-size:12px;padding:16px;max-width:300px;color:#111;line-height:1.6}
+    h2{text-align:center;font-size:16px;margin-bottom:4px}
+    .sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px}
+    hr{border:none;border-top:1px dashed #999;margin:6px 0}
+    @media print{body{padding:4px}}
+  </style></head><body>
+    <h2>&#9733; CIERRE DEL DIA &#9733;</h2>
+    <div class="sub">${c.fecha}</div>
+    <hr>
+    ${row('Ordenes atendidas:',c.numVentas)}
+    <hr>
+    ${row('Ventas efectivo:',fmt2(c.ef||0))}
+    ${row('Ventas tarjeta:',fmt2(c.tc||0))}
+    ${row('Ventas SINPE:',fmt2(c.si||0))}
+    ${c.dv?row('Ventas divididas:',fmt2(c.dv)):''}
+    ${row('TOTAL VENTAS:',fmt2(c.totalVentas),true)}
+    <hr>
+    ${c.gastoCaja?row('Gastos de caja:',' - '+fmt2(c.gastoCaja)):''}
+    ${c.gastoFuerte?row('Gastos caja fuerte:',fmt2(c.gastoFuerte)):''}
+    ${c.gastoSinpe?row('Gastos SINPE:',fmt2(c.gastoSinpe)):''}
+    ${c.gastoTransf?row('Gastos transferencia:',fmt2(c.gastoTransf)):''}
+    ${row('Efectivo neto en caja:',fmt2(c.efectivoCaja),true)}
+    ${c.cajainicial?row('Caja inicial del dia:',fmt2(c.cajainicial)):''}
+    ${c.cajainicial?row('Efectivo a guardar:',fmt2(Math.max(0,c.efectivoCaja-c.cajainicial)),true):''}
+    ${gasHtml}
+    <hr>
+    <div style="text-align:center;font-size:11px;color:#888;margin-top:8px">* * * FIN DEL CIERRE * * *</div>
+  </body></html>`);
+  w.document.close();w.focus();
+  setTimeout(()=>{w.print();},500);
 }
 
 /* ── MENU ADMIN ── */
@@ -1205,7 +1310,7 @@ function renderUsers(){
         </div>`:(u.role==="admin"?`<div style="font-size:11px;color:#aaa;margin-bottom:10px">Acceso completo</div>`:`<div style="font-size:11px;color:#aaa;margin-bottom:10px">Solo admin edita accesos</div>`)}
       <div style="display:flex;flex-direction:column;gap:5px">
         ${(isAdmin||(activeUser&&activeUser.id===u.id))?`<button class="btn-blue" style="width:100%;padding:6px;font-size:11px" onclick="showCambiarPin(${u.id})">&#128273; Cambiar PIN</button>`:''}
-        ${isAdmin&&activeUser&&u.id!==activeUser.id?`<button class="btn-red" style="width:100%;padding:6px;font-size:11px" onclick="deleteUser(${u.id})">&times; Eliminar</button>`:""}
+        ${isAdmin?`<button class="btn-red" style="width:100%;padding:6px;font-size:11px" onclick="deleteUser(${u.id})">&times; Eliminar</button>`:""}
       </div>
     </div>`).join("")||`<div class="empty">Sin usuarios registrados</div>`;
 }
@@ -1221,7 +1326,14 @@ function addUser(){
   document.getElementById("uNm").value="";document.getElementById("uPin").value="";
   saveLS();renderUsers();toast("\u2713 Usuario agregado");
 }
-function deleteUser(id){if(!confirm("Eliminar este usuario?"))return;users=users.filter(u=>u.id!==id);saveLS();renderUsers();toast("Usuario eliminado");}
+function deleteUser(id){
+  const u=users.find(u=>u.id===id);if(!u)return;
+  const adminCount=users.filter(u=>u.role==="admin").length;
+  if(u.role==="admin"&&adminCount<=1){toast("No se puede eliminar el ultimo administrador");return;}
+  if(!confirm("Eliminar usuario '"+u.name+"'?"))return;
+  if(activeUser&&activeUser.id===id){doLogout();}
+  users=users.filter(u=>u.id!==id);saveLS();renderUsers();toast("Usuario eliminado");
+}
 
 /* ── DESCUENTO ── */
 function setDescTipo(tipo){descuento.tipo=tipo;descuento.valor=0;renderMesaModal();}
@@ -1457,6 +1569,7 @@ function saveLS(){
     localStorage.setItem('rpos_gastos',JSON.stringify(gastos));
     localStorage.setItem('rpos_cierres',JSON.stringify(cierres));
     localStorage.setItem('rpos_cajaBilletes',JSON.stringify(cajaBilletes));
+    localStorage.setItem('rpos_cajainicial',JSON.stringify(cajainicialBilletes));
     localStorage.setItem('rpos_orders',JSON.stringify(orders));
     localStorage.setItem('rpos_nextMid',nextMid);
     localStorage.setItem('rpos_nextVid',nextVid);
@@ -1474,6 +1587,7 @@ function loadLS(){
     const g=localStorage.getItem('rpos_gastos');if(g)gastos=JSON.parse(g);
     const ci=localStorage.getItem('rpos_cierres');if(ci)cierres=JSON.parse(ci);
     const cb=localStorage.getItem('rpos_cajaBilletes');if(cb)cajaBilletes=JSON.parse(cb);
+    const ci2=localStorage.getItem('rpos_cajainicial');if(ci2)try{cajainicialBilletes=JSON.parse(ci2)||{};}catch(e){}
     const ord=localStorage.getItem('rpos_orders');if(ord)orders=JSON.parse(ord);
     const nmi=localStorage.getItem('rpos_nextMid');if(nmi)nextMid=parseInt(nmi);
     const nvi=localStorage.getItem('rpos_nextVid');if(nvi)nextVid=parseInt(nvi);
@@ -1531,6 +1645,7 @@ function buildComandaHTML(mesa,ord){
 function toast(msg){const old=document.getElementById("_toast");if(old)old.remove();const t=document.createElement("div");t.className="toast";t.id="_toast";t.innerHTML=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);}
 
 /* ── INIT ── */
+try{
 loadLS();
 ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(b)b.style.display="none";});
 if(TABLET_MODE){
@@ -1539,6 +1654,7 @@ if(TABLET_MODE){
 }
 showLoginUsers();
 renderSalon();
+}catch(err){document.body.innerHTML='<div style="padding:40px;font-family:monospace;background:#fff"><h2 style="color:red">Error al cargar</h2><pre style="color:#333;white-space:pre-wrap;margin-top:12px">'+err.stack+'</pre></div>';}
 </script>
 </body>
 </html>
