@@ -661,16 +661,34 @@ function setMenuTab(t){
 }
 
 /* ── SALON ── */
+function getMesaEmoji(m){
+  if(mesasEmojis&&mesasEmojis[m])return mesasEmojis[m];
+  if(m.toLowerCase().includes("llevar"))return"\U0001F961";
+  if(m.toLowerCase().includes("barra"))return"\U0001FA91";
+  return"\U0001F37D";
+}
 function renderSalon(){
-  document.getElementById("salonGrid").innerHTML=mesas.map(m=>{
+  document.getElementById("salonGrid").innerHTML=mesas.map(function(m,i){
     const ord=orders[m];const occ=ord&&ord.items.length>0;
-    const sub=occ?ord.items.reduce((a,i)=>a+i.price*i.qty,0):0;
-    return`<div class="mesa${occ?" ocupada":""}" onclick="openMesa('${m}')">
-      <div class="mesa-icon">${m.startsWith("Para")?"\uD83E\uDD61":m==="Barra"?"\uD83E\uDE91":"\uD83C\uDF7D"}</div>
-      <div class="mesa-nombre">${m}</div>
-      <div class="mesa-info">${occ?fmt(sub)+" \u00B7 "+ord.items.reduce((a,i)=>a+i.qty,0)+" items":"Libre"}</div>
-    </div>`;
+    const sub=occ?ord.items.reduce(function(a,b){return a+b.price*b.qty;},0):0;
+    const nm=m.replace(/'/g,"\\'");
+    return'<div class="mesa'+(occ?' ocupada':'')+'" draggable="true"'+
+      ' ondragstart="mesasDragIdx='+i+';event.dataTransfer.effectAllowed=\'move\'"'+
+      ' ondragover="event.preventDefault()"'+
+      ' ondrop="event.preventDefault();salonDropMesa('+i+')"'+
+      ' onclick="openMesa(\''+nm+'\')">'+
+      '<div class="mesa-icon">'+getMesaEmoji(m)+'</div>'+
+      '<div class="mesa-nombre">'+m+'</div>'+
+      '<div class="mesa-info">'+(occ?fmt(sub)+' \u00B7 '+ord.items.reduce(function(a,b){return a+b.qty;},0)+' items':'Libre')+'</div>'+
+    '</div>';
   }).join("");
+}
+function salonDropMesa(toIdx){
+  if(mesasDragIdx===null||mesasDragIdx===toIdx)return;
+  const moved=mesas.splice(mesasDragIdx,1)[0];
+  mesas.splice(toIdx,0,moved);
+  mesasDragIdx=null;
+  saveLS();renderSalon();
 }
 function openMesa(m){activeMesa=m;if(!orders[m])orders[m]={items:[]};payMethod=null;efBilletes={};splitGroups=[];splitAssignment={};nextGroupId=1;descuento={tipo:'pct',valor:0};cobraItbis=ticketConfig.defaultItbis!==false;cobraServicio=ticketConfig.defaultServicio===true;renderMesaModal();}
 function getTotal(){
