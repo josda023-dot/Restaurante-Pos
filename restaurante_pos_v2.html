@@ -1107,6 +1107,90 @@ function renderGastos(){
 }
 
 /* ── CIERRE ── */
+function renderCierre(){
+  const ef=ventas.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
+  const tc=ventas.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
+  const si=ventas.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
+  const dv=ventas.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
+  const gastoCaja=gastos.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
+  const gastoFuerte=gastos.filter(g=>g.tipo==="fuerte").reduce((a,g)=>a+g.monto,0);
+  const gastoSinpe=gastos.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
+  const gastoTransf=gastos.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
+  const totalVentas=ef+tc+si+dv;
+  const efectivoCaja=ef-gastoCaja;
+  const cajainicial=totalCajainicial();
+  const box=document.getElementById("cierreBox");
+  if(!box)return;
+  const r=(l,v,bold)=>`<div style="display:flex;justify-content:space-between;padding:5px 0;${bold?"font-weight:700;border-top:1px solid #ddd;margin-top:4px;font-size:15px":"font-size:14px"}"><span style="color:#555">${l}</span><span style="color:#111">${fmt(v)}</span></div>`;
+  box.innerHTML=`
+    <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">VENTAS DEL DIA</div>
+      ${r("Ordenes atendidas",""+ventas.length)}
+      ${ef?r("Efectivo:",ef):""}
+      ${tc?r("Tarjeta:",tc):""}
+      ${si?r("SINPE:",si):""}
+      ${dv?r("Dividido:",dv):""}
+      ${r("TOTAL VENTAS:",totalVentas,true)}
+    </div>
+    <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">EFECTIVO EN CAJA</div>
+      ${r("Ventas efectivo:",ef)}
+      ${gastoCaja?r("Gastos de caja: -",gastoCaja):""}
+      ${r("EFECTIVO NETO EN CAJA:",efectivoCaja,true)}
+      ${cajainicial?r("Caja inicial del dia:",cajainicial):""}
+      ${cajainicial?r("Efectivo a guardar:",Math.max(0,efectivoCaja-cajainicial),true):""}
+    </div>
+    ${gastos.length?`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">GASTOS DEL DIA</div>
+      ${gastos.map(g=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:#555">${g.desc} <span style="font-size:11px;color:#999">(${g.tipo})</span></span><span style="color:#c0392b;font-weight:600">- ${fmt(g.monto)}</span></div>`).join("")}
+    </div>`:""}
+    ${Object.keys(cajaBilletes).length?`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">DESGLOSE FISICO DE CAJA</div>
+      ${DENOMINACIONES.filter(d=>cajaBilletes[d.val]>0).map(d=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span style="color:#555">${fmt(d.val)} x ${cajaBilletes[d.val]}</span><span style="color:#111;font-weight:600">${fmt(d.val*cajaBilletes[d.val])}</span></div>`).join("")}
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:700;border-top:1px solid #ddd;margin-top:4px"><span>Total fisico:</span><span>${fmt(Object.entries(cajaBilletes).reduce((a,[v,c])=>a+parseInt(v)*c,0))}</span></div>
+    </div>`:""}
+  `;
+  const hist=document.getElementById("cierreHistorial");
+  if(hist&&cierres.length){
+    hist.innerHTML=`<div style="font-size:14px;font-weight:700;color:#555;margin-bottom:10px">Cierres anteriores</div>`+
+    [...cierres].reverse().slice(0,10).map(c=>`<div style="background:#f9f9f9;border:1px solid #e8e8e8;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-weight:700;color:#333">${c.fecha}</span><span style="font-weight:700;color:#1D9E75">${fmt(c.totalVentas||0)}</span></div>
+      <div style="color:#888;font-size:12px">${c.numVentas||0} ordenes · Efectivo neto: ${fmt(c.efectivoCaja||0)}${c.cajainicial?" · Caja inicial: "+fmt(c.cajainicial):""}</div>
+    </div>`).join("");
+  }else if(hist){hist.innerHTML="";}
+}
+function hacerCierre(){
+  if(!confirm("Confirmar cierre del dia?"))return;
+  const d=new Date();
+  const pad=n=>String(n).padStart(2,"0");
+  const fecha=pad(d.getDate())+"/"+(pad(d.getMonth()+1))+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes());
+  const ef=ventas.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
+  const tc=ventas.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
+  const si=ventas.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
+  const dv=ventas.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
+  const gastoCaja=gastos.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
+  const gastoFuerte=gastos.filter(g=>g.tipo==="fuerte").reduce((a,g)=>a+g.monto,0);
+  const gastoSinpe=gastos.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
+  const gastoTransf=gastos.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
+  const totalVentas=ef+tc+si+dv;
+  const efectivoCaja=ef-gastoCaja;
+  const cajainicial=totalCajainicial();
+  const cierreData={
+    fecha,fechaISO:d.toISOString().slice(0,10),
+    numVentas:ventas.length,
+    ef,tc,si,dv,totalVentas,
+    gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
+    efectivoCaja,cajainicial,
+    gastosList:[...gastos],
+    billetesCaja:{...cajaBilletes}
+  };
+  cierres.push(cierreData);
+  printCierreReport(cierreData);
+  ventas=[];gastos=[];cajaBilletes={};cajainicialBilletes={};
+  saveLS();
+  renderCierre();
+  setTimeout(()=>showCajaInicialModal(),600);
+}
 function totalCajainicial(){return Object.entries(cajainicialBilletes).reduce((a,[v,c])=>a+parseInt(v)*c,0);}
 function setCajainicialDenom(val,monto){
   const cnt=Math.round((parseInt(monto)||0)/val);
