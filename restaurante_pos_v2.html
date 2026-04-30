@@ -19,7 +19,7 @@ body{background:#f5f5f0;min-height:100vh}
 .legend{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
 .leg{display:flex;align-items:center;gap:5px;font-size:12px;color:#666}
 .leg-dot{width:12px;height:12px;border-radius:3px}
-.salon{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;max-width:800px}
+.salon{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;width:100%}
 .mesa{border-radius:12px;padding:16px 12px;cursor:pointer;border:1px solid #ddd;background:#fff;transition:border-color .12s,transform .1s;text-align:center;user-select:none}
 .mesa:hover{border-color:#999;transform:translateY(-2px)}
 .mesa.ocupada{background:#E1F5EE;border-color:#5DCAA5}
@@ -554,11 +554,7 @@ let menu=[
   {id:154,name:"Chilero",price:3000,cat:"+Varios",emoji:"\uD83C\uDF36"},
 ];
 let nextMid=158,nextVid=1,nextUid=3;
-let mesas=["Mesa 1","Mesa 2","Mesa 3","Mesa 4","Mesa 5","Mesa 6","Mesa 7","Mesa 8","Para llevar","Barra"];
-let mesasEmojis={"Para llevar":"🥡","Barra":"🪑"};
-let mesasDragIdx=null;
-let mesasPos={};
-let fpDragging=null;
+let mesas=["Mesa 1","Mesa 2","Mesa 3","Mesa 4","Mesa 5","Mesa 6","Mesa 7","Mesa 8","Mesa 9","Mesa 10","Mesa 11","Mesa 12","Mesa 13","Mesa 14","Barra 1","Barra 2","Barra 3","Para llevar 1","Para llevar 2"];
 let orders={},ventas=[],gastos=[],cierres=[];
 let users=[
   {id:1,name:"Carlos Mora",role:"admin",pin:"1234",allowedScreens:[...ALL_SCREENS]},
@@ -662,34 +658,42 @@ function setMenuTab(t){
 }
 
 /* ── SALON ── */
-function getMesaEmoji(m){
-  if(m.toLowerCase().includes('llevar'))return'🥡';
-  if(m.toLowerCase().includes('barra'))return'🪑';
+function getMesaIcon(m){
+  const l=m.toLowerCase();
+  if(l.includes('llevar'))return'🥡';
+  if(l.includes('barra'))return'🪑';
   return'🍽';
 }
-function getFloorPos(m,i){
-  if(mesasPos[m])return mesasPos[m];
-  const cols=4,col=i%cols,row=Math.floor(i/cols);
-  return{x:8+col*23,y:10+row*30};
-}
+function getMesaNum(m){const match=m.match(/\d+/);return match?match[0]:m.charAt(0).toUpperCase();}
 function renderSalon(){
   const grid=document.getElementById("salonGrid");
-  grid.style.cssText="position:relative;width:100%;height:480px;background:#f5f0e8;border:2px solid #d9cfc0;border-radius:12px;overflow:hidden;display:block";
-  let html='';
-  mesas.forEach(function(m,i){
+  const isAdmin=activeUser&&activeUser.role==="admin";
+  grid.style.cssText='';
+  let html=mesas.map(function(m){
     const ord=orders[m];const occ=ord&&ord.items.length>0;
     const sub=occ?ord.items.reduce(function(a,b){return a+b.price*b.qty;},0):0;
-    const pos=getFloorPos(m,i);
-    const nm=m.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    html+='<div class="mesa'+(occ?' ocupada':'')+'"'+
-      ' style="position:absolute;left:'+pos.x+'%;top:'+pos.y+'%;transform:translate(-50%,-50%);cursor:pointer;width:82px;user-select:none"'+
-      ' onclick="openMesa(\''+nm+'\')">' +
-      '<div class="mesa-icon">'+getMesaEmoji(m)+'</div>'+
-      '<div class="mesa-nombre">'+m+'</div>'+
-      '<div class="mesa-info">'+(occ?fmt(sub):'Libre')+'</div>'+
+    const nm=m.replace(/'/g,"\\'");
+    return'<div class="mesa'+(occ?' ocupada':'')+'" onclick="openMesa(\''+nm+'\')" style="cursor:pointer">'+
+      '<div style="font-size:38px;font-weight:900;line-height:1.1;color:'+(occ?'#fff':'#1D9E75')+'">'+getMesaNum(m)+'</div>'+
+      '<div class="mesa-nombre" style="margin-top:4px">'+m+'</div>'+
+      '<div class="mesa-info">'+(occ?fmt(sub)+' &middot; '+ord.items.reduce(function(a,b){return a+b.qty;},0)+' items':'Libre')+'</div>'+
     '</div>';
-  });
+  }).join('');
+  if(isAdmin){
+    html+='<div class="mesa" onclick="agregarMesaRapido()" style="cursor:pointer;border:2px dashed #1D9E75;background:#f0faf5">'+
+      '<div style="font-size:38px;font-weight:900;line-height:1.1;color:#1D9E75">+</div>'+
+      '<div class="mesa-nombre" style="color:#1D9E75;margin-top:4px">Agregar</div>'+
+      '<div class="mesa-info" style="color:#aaa">nueva mesa</div>'+
+    '</div>';
+  }
   grid.innerHTML=html;
+}
+function agregarMesaRapido(){
+  const num=mesas.filter(function(m){return m.toLowerCase().startsWith('mesa');}).length+1;
+  const nm='Mesa '+num;
+  mesas.push(nm);
+  saveLS();renderSalon();
+  toast('✓ '+nm+' agregada');
 }
 function openMesa(m){activeMesa=m;if(!orders[m])orders[m]={items:[]};payMethod=null;efBilletes={};splitGroups=[];splitAssignment={};nextGroupId=1;descuento={tipo:'pct',valor:0};cobraItbis=ticketConfig.defaultItbis!==false;cobraServicio=ticketConfig.defaultServicio===true;renderMesaModal();}
 function getTotal(){
@@ -1123,8 +1127,17 @@ function renderVentas(){
     const extra=v.pagos?`<div style="font-size:10px;color:#888;margin-top:2px">${v.pagos.map(p=>`${ic[p.method]||""}${fmt(p.amount)}`).join(" + ")}</div>`:"";
     const descBadge=v.descMonto>0?`<div style="font-size:10px;color:#E24B4A">desc. ${fmt(v.descMonto)}</div>`:"";
     const vi=ventas.indexOf(v);
-    return`<tr><td style="font-size:11px;color:#888">${v.fecha||'&mdash;'}</td><td>${v.hora}</td><td>${v.mesa}</td><td><span class="badge ${badge}">${v.metodo}</span>${extra}</td><td>${v.cobradoPor||"&mdash;"}</td><td>${fmt(v.recibido)}</td><td>${v.vuelto>0?fmt(v.vuelto):"&mdash;"}</td><td><strong>${fmt(v.total)}</strong>${descBadge}</td><td><button onclick="reprintTiquete(ventas[${vi}])" title="Reimprimir tiquete" style="background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">🖨</button></td></tr>`;
+    const canDelete=activeUser&&activeUser.role==="admin";
+    return`<tr><td style="font-size:11px;color:#888">${v.fecha||'&mdash;'}</td><td>${v.hora}</td><td>${v.mesa}</td><td><span class="badge ${badge}">${v.metodo}</span>${extra}</td><td>${v.cobradoPor||"&mdash;"}</td><td>${fmt(v.recibido)}</td><td>${v.vuelto>0?fmt(v.vuelto):"&mdash;"}</td><td><strong>${fmt(v.total)}</strong>${descBadge}</td><td style="display:flex;gap:4px;align-items:center"><button onclick="reprintTiquete(ventas[${vi}])" title="Reimprimir tiquete" style="background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">🖨</button>${canDelete?`<button onclick="borrarVenta(${vi})" title="Eliminar venta" style="background:none;border:1px solid #fcc;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px;color:#c0392b">🗑</button>`:""}</td></tr>`;
   }).join("");
+}
+
+function borrarVenta(idx){
+  const v=ventas[idx];if(!v)return;
+  if(!confirm("Eliminar venta de "+fmt(v.total)+" ("+v.mesa+" - "+v.hora+")?\n\nEsta accion no se puede deshacer."))return;
+  ventas.splice(idx,1);
+  saveLS();renderVentas();
+  toast("Venta eliminada");
 }
 
 /* ── GASTOS ── */
@@ -1646,7 +1659,7 @@ function saveLS(){
     localStorage.setItem('rpos_nextUid',nextUid);
     localStorage.setItem('rpos_ticketConfig',JSON.stringify(ticketConfig));
     localStorage.setItem('rpos_mesas',JSON.stringify(mesas));
-    localStorage.setItem('rpos_mesasPos',JSON.stringify(mesasPos));
+
   }catch(e){}
   try{fbOrders.set(orders);}catch(e){}
 }
@@ -1665,77 +1678,24 @@ function loadLS(){
     const nvi=localStorage.getItem('rpos_nextVid');if(nvi)nextVid=parseInt(nvi);
     const nui=localStorage.getItem('rpos_nextUid');if(nui)nextUid=parseInt(nui);
     const tc=localStorage.getItem('rpos_ticketConfig');if(tc)ticketConfig={...ticketConfig,...JSON.parse(tc)};
-    const ms=localStorage.getItem('rpos_mesas');if(ms){const _m=JSON.parse(ms);if(_m&&_m.length)mesas=_m;}
-    const mp=localStorage.getItem('rpos_mesasPos');if(mp)mesasPos=JSON.parse(mp)||{};
+    const ms=localStorage.getItem('rpos_mesas');if(ms){const _m=JSON.parse(ms);
+      // accept if non-empty and not old format (old format had "Para llevar" without number or "Mesa1" without space)
+      const isOld=_m.some(function(x){return x==="Para llevar"||x==="Barra"||/^Mesa\d+$/.test(x);});
+      if(_m&&_m.length&&!isOld)mesas=_m;}
+
   }catch(e){}
 }
 
 /* ── MESAS ADMIN ── */
 function renderMesasAdmin(){
   const list=document.getElementById("mesasAdminList");if(!list)return;
-  // Floor plan editor
-  let edHtml='<div id="fpEditor" style="position:relative;width:100%;height:460px;background:#f5f0e8;border:2px dashed #b5a898;border-radius:10px;overflow:hidden;touch-action:none;margin-bottom:16px">'+
-    '<div style="position:absolute;bottom:8px;right:10px;font-size:11px;color:#b5a898">Arrastrá las mesas para ubicarlas</div>';
-  mesas.forEach(function(m,i){
-    const pos=getFloorPos(m,i);
-    edHtml+='<div class="mesa" id="fpm-'+i+'"'+
-      ' style="position:absolute;left:'+pos.x+'%;top:'+pos.y+'%;transform:translate(-50%,-50%);cursor:grab;width:82px;user-select:none;touch-action:none"'+
-      ' onpointerdown="fpStart(event,'+i+')">' +
-      '<div class="mesa-icon">'+getMesaEmoji(m)+'</div>'+
-      '<div class="mesa-nombre">'+m+'</div>'+
-      '<div class="mesa-info" style="font-size:9px;color:#aaa">mover</div>'+
+  if(!mesas.length){list.innerHTML='<div class="empty">No hay mesas</div>';return;}
+  list.innerHTML=mesas.map(function(m,i){
+    return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#fff;border:1px solid #eee;border-radius:8px;margin-bottom:6px">'+
+      '<span style="font-size:14px">'+getMesaIcon(m)+' <b>'+m+'</b></span>'+
+      '<button onclick="eliminarMesaAdmin('+i+')" style="padding:4px 12px;border:none;border-radius:6px;background:#fee;color:#c0392b;cursor:pointer;font-size:13px;font-weight:700">&times; Eliminar</button>'+
     '</div>';
-  });
-  edHtml+='</div>';
-  // List with delete
-  let listHtml='<div style="display:flex;flex-direction:column;gap:6px">';
-  mesas.forEach(function(m,i){
-    listHtml+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#fff;border:1px solid #eee;border-radius:8px">'+
-      '<span style="font-size:14px">'+getMesaEmoji(m)+' <b>'+m+'</b></span>'+
-      '<button onclick="eliminarMesaAdmin('+i+')" style="padding:4px 12px;border:none;border-radius:6px;background:#fee;color:#c0392b;cursor:pointer;font-size:13px;font-weight:700">&times;</button>'+
-    '</div>';
-  });
-  listHtml+='</div>';
-  list.innerHTML=edHtml+listHtml;
-  // Attach pointer events to floor plan
-  const fp=document.getElementById("fpEditor");
-  if(fp){
-    fp.addEventListener('pointermove',fpMove,{passive:false});
-    fp.addEventListener('pointerup',fpEnd);
-    fp.addEventListener('pointercancel',fpEnd);
-  }
-}
-function fpStart(e,i){
-  e.preventDefault();
-  const fp=document.getElementById("fpEditor");if(!fp)return;
-  const rect=fp.getBoundingClientRect();
-  const m=mesas[i];
-  const pos=getFloorPos(m,i);
-  fpDragging={i:i,m:m,rect:rect,
-    ox:pos.x,oy:pos.y,
-    sx:e.clientX,sy:e.clientY};
-  const el=document.getElementById("fpm-"+i);
-  if(el){el.style.cursor='grabbing';el.style.zIndex=10;el.setPointerCapture(e.pointerId);}
-}
-function fpMove(e){
-  if(!fpDragging)return;
-  e.preventDefault();
-  const fp=document.getElementById("fpEditor");if(!fp)return;
-  const rect=fp.getBoundingClientRect();
-  const dx=(e.clientX-fpDragging.sx)/rect.width*100;
-  const dy=(e.clientY-fpDragging.sy)/rect.height*100;
-  const nx=Math.max(6,Math.min(94,fpDragging.ox+dx));
-  const ny=Math.max(6,Math.min(94,fpDragging.oy+dy));
-  mesasPos[fpDragging.m]={x:nx,y:ny};
-  const el=document.getElementById("fpm-"+fpDragging.i);
-  if(el){el.style.left=nx+'%';el.style.top=ny+'%';}
-}
-function fpEnd(e){
-  if(!fpDragging)return;
-  const el=document.getElementById("fpm-"+fpDragging.i);
-  if(el){el.style.cursor='grab';el.style.zIndex='';}
-  saveLS();renderSalon();
-  fpDragging=null;
+  }).join('');
 }
 function agregarMesaAdmin(){
   const nm=document.getElementById("ma-mesa-nombre").value.trim();
@@ -1751,8 +1711,7 @@ function eliminarMesaAdmin(idx){
   const ord=orders[m];
   if(ord&&ord.items&&ord.items.length>0){toast("⚠️ '"+m+"' tiene una orden abierta");return;}
   if(!confirm("Eliminar '"+m+"'?"))return;
-  mesas.splice(idx,1);
-  delete orders[m];delete mesasPos[m];
+  mesas.splice(idx,1);delete orders[m];
   saveLS();renderMesasAdmin();renderSalon();
   toast("Mesa eliminada");
 }
