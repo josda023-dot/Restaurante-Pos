@@ -674,7 +674,7 @@ function renderSalon(){
     const sub=occ?ord.items.reduce(function(a,b){return a+b.price*b.qty;},0):0;
     const nm=m.replace(/'/g,"\\'");
     return'<div class="mesa'+(occ?' ocupada':'')+'" onclick="openMesa(\''+nm+'\')" style="cursor:pointer">'+
-      '<div style="font-size:38px;font-weight:900;line-height:1.1;color:'+(occ?'#fff':'#1D9E75')+'">'+getMesaNum(m)+'</div>'+
+      '<div style="font-size:38px;font-weight:900;line-height:1.1;color:'+(occ?'#E24B4A':'#1D9E75')+'">'+getMesaNum(m)+'</div>'+
       '<div class="mesa-nombre" style="margin-top:4px">'+m+'</div>'+
       '<div class="mesa-info">'+(occ?fmt(sub)+' &middot; '+ord.items.reduce(function(a,b){return a+b.qty;},0)+' items':'Libre')+'</div>'+
     '</div>';
