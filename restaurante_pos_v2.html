@@ -23,6 +23,37 @@ body{background:#f5f5f0;min-height:100vh}
 .mesa{border-radius:12px;padding:16px 12px;cursor:pointer;border:1px solid #ddd;background:#fff;transition:border-color .12s,transform .1s;text-align:center;user-select:none}
 .mesa:hover{border-color:#999;transform:translateY(-2px)}
 .mesa.ocupada{background:#E1F5EE;border-color:#5DCAA5}
+.mesa.alerta-warn{background:#FFF8E1;border-color:#F59E0B!important;border-width:2px!important}
+.mesa.alerta-critica{background:#FFF1F0;border-color:#E24B4A!important;border-width:2px!important;animation:pulso-alerta 1.4s ease-in-out infinite}
+@keyframes pulso-alerta{0%,100%{box-shadow:0 0 0 0 rgba(226,75,74,0.4)}50%{box-shadow:0 0 0 6px rgba(226,75,74,0)}}
+/* CALENDARIO */
+.cal-wrap{background:#f9fafb;border:1px solid #e8e8e8;border-radius:10px;padding:8px;margin-bottom:8px;max-width:320px}
+.cal-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.cal-arr{background:#fff;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:2px 9px;font-size:15px;color:#333;line-height:1.5}
+.cal-arr:hover{background:#f0f0f0}
+.cal-mes-lbl{font-size:13px;font-weight:700;color:#111}
+.cal-hdr{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:2px}
+.cal-hcell{text-align:center;font-size:9px;font-weight:700;color:#bbb;padding:1px 0}
+.cal-body{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-cell{min-height:28px;border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid transparent}
+.cal-activo{cursor:pointer}
+.cal-activo:hover{filter:brightness(0.93)}
+.cal-verde{background:#E1F5EE;border-color:#5DCAA5}
+.cal-ambar{background:#FEF3C7;border-color:#F59E0B}
+.cal-ambos{background:#E1F5EE;border-color:#5DCAA5}
+.cal-sel{background:#1D9E75!important;border-color:#085041!important}
+.cal-hoy .cal-n{font-weight:900;text-decoration:underline;text-underline-offset:2px}
+.cal-n{font-size:11px;font-weight:600;color:#333;line-height:1}
+.cal-sel .cal-n{color:#fff}
+.cal-dots{display:flex;gap:2px;margin-top:2px}
+.cal-pv{width:4px;height:4px;border-radius:50%;background:#1D9E75}
+.cal-pc{width:4px;height:4px;border-radius:50%;background:#F59E0B}
+.cal-psel{background:#fff!important}
+.cal-legend{display:flex;gap:10px;margin-top:6px;font-size:10px;color:#888;justify-content:flex-start}
+.cal-legend span{display:flex;align-items:center;gap:3px}
+.cal-todo-btn{display:inline-block;margin-bottom:6px;padding:4px 12px;border-radius:7px;border:1px solid #1D9E75;background:#E1F5EE;color:#085041;font-size:12px;font-weight:600;cursor:pointer}
+.cal-todo-btn:hover{background:#c5edd9}
+.cierre-det{background:#f9fafb;border:1px solid #e8e8e8;border-radius:10px;padding:12px;margin-top:6px;font-size:13px}
 .mesa-nombre{font-size:13px;font-weight:600;color:#111;margin-bottom:4px}
 .mesa-info{font-size:11px;color:#666}
 .mesa-icon{font-size:22px;margin-bottom:6px}
@@ -225,6 +256,7 @@ body{background:#f5f5f0;min-height:100vh}
       <tbody id="ventasTbody"></tbody></table>
     </div>
   </div>
+  <div class="card" id="masVendidosBox" style="margin-top:14px"></div>
 </div>
 
 <div class="screen" id="screen-gastos">
@@ -245,9 +277,10 @@ body{background:#f5f5f0;min-height:100vh}
     </div>
     <button class="btn-green" onclick="addGasto()">Agregar gasto</button>
   </div>
+  <div id="gastosCalContainer"></div>
   <div class="card">
-    <div class="section-title">Gastos del dia</div>
-    <table class="tbl"><thead><tr><th>Hora</th><th>Descripcion</th><th>Origen</th><th>Monto</th></tr></thead>
+    <div class="section-title" id="gastosTituloCard">Gastos del día</div>
+    <table class="tbl"><thead><tr><th>Fecha</th><th>Hora</th><th>Descripcion</th><th>Origen</th><th>Monto</th></tr></thead>
     <tbody id="gastosTbody"></tbody></table>
   </div>
 </div>
@@ -372,6 +405,12 @@ try{
 }catch(e){console.warn('Firebase no disponible, modo offline:',e.message);}
 const SCREEN_LABELS={salon:"Salon",ventas:"Ventas",gastos:"Gastos",cierre:"Cierre","menu-admin":"Menu",usuarios:"Usuarios"};
 const DENOMINACIONES=[
+  {val:20000,lbl:"Billete"},{val:10000,lbl:"Billete"},
+  {val:5000,lbl:"Billete"},{val:2000,lbl:"Billete"},{val:1000,lbl:"Billete"},
+  {val:500,lbl:"Moneda"},{val:100,lbl:"Moneda"},{val:50,lbl:"Moneda"},
+  {val:25,lbl:"Moneda"},{val:10,lbl:"Moneda"},{val:5,lbl:"Moneda"},
+];
+const DENOMINACIONES_CAJA=[
   {val:20000,lbl:"Billete"},{val:10000,lbl:"Billete"},
   {val:5000,lbl:"Billete"},{val:2000,lbl:"Billete"},{val:1000,lbl:"Billete"},
   {val:500,lbl:"Moneda"},{val:100,lbl:"Moneda"},{val:50,lbl:"Moneda"},
@@ -565,12 +604,19 @@ let efBilletes={},cajaBilletes={};
 let cajainicialBilletes={};  // denomination counts for initial cash
 let activeUser=null,pendingLoginId=null,loginPinStr="",pinCobroCb=null,pinCobroStr="",pinCobroUserId=null;
 let splitGroups=[],splitAssignment={},nextGroupId=1;
+let splitEfQueue=[],splitEfBilletes={},splitEfCobradoPor=null;
+let mesasOpenedAt={};
 let descuento={tipo:'pct',valor:0};
 let cobraItbis=true,cobraServicio=false;
 let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false};
 let ventasFiltro=null;
 let ventasMesFiltro=null;
 let ventasDiaFiltro=null;
+let calVentasMes=new Date().toISOString().slice(0,7);
+let calCierresMes=new Date().toISOString().slice(0,7);
+let calCierresSelDia=null;
+let calGastosMes=new Date().toISOString().slice(0,7);
+let calGastosSelDia=null;
 let menuAdminCatFiltro=null;
 let cambiarPinState={uid:null,phase:'current',str:'',newPin:''};
 
@@ -665,6 +711,19 @@ function getMesaIcon(m){
   return'🍽';
 }
 function getMesaNum(m){const match=m.match(/\d+/);return match?match[0]:m.charAt(0).toUpperCase();}
+function getMesaTimer(m){
+  if(!mesasOpenedAt[m])return'';
+  const mins=Math.floor((Date.now()-mesasOpenedAt[m])/60000);
+  if(mins<60)return mins+'min';
+  return Math.floor(mins/60)+'h '+(mins%60)+'min';
+}
+function getMesaAlertLevel(m){
+  if(!mesasOpenedAt[m])return 0;
+  const mins=Math.floor((Date.now()-mesasOpenedAt[m])/60000);
+  if(mins>=60)return 2;
+  if(mins>=45)return 1;
+  return 0;
+}
 function renderSalon(){
   const grid=document.getElementById("salonGrid");
   const isAdmin=activeUser&&activeUser.role==="admin";
@@ -695,7 +754,7 @@ function agregarMesaRapido(){
   saveLS();renderSalon();
   toast('✓ '+nm+' agregada');
 }
-function openMesa(m){activeMesa=m;if(!orders[m])orders[m]={items:[]};payMethod=null;efBilletes={};splitGroups=[];splitAssignment={};nextGroupId=1;descuento={tipo:'pct',valor:0};cobraItbis=ticketConfig.defaultItbis!==false;cobraServicio=ticketConfig.defaultServicio===true;renderMesaModal();}
+function openMesa(m){activeMesa=m;if(!orders[m])orders[m]={items:[]};if(!orders[m]||!orders[m].items||!orders[m].items.length)mesasOpenedAt[m]=Date.now();payMethod=null;efBilletes={};splitGroups=[];splitAssignment={};nextGroupId=1;descuento={tipo:'pct',valor:0};cobraItbis=ticketConfig.defaultItbis!==false;cobraServicio=ticketConfig.defaultServicio===true;renderMesaModal();}
 function getTotal(){
   const ord=orders[activeMesa];
   const sub=ord.items.reduce((a,i)=>a+i.price*i.qty,0);
@@ -790,6 +849,7 @@ function renderMesaModal(){
       </div>
       <button class="btn-cobrar" id="btn-cobrar-main" onclick="iniciarCobro()" ${can?"":"disabled"}>Cobrar ${fmt(total)}</button>
       <button class="btn-sec" style="margin-bottom:6px;${hasItems?"border-color:#8B5CF6;color:#5B21B6;background:#F3E8FF":""}" onclick="${hasItems?"showSplitModal()":""}" ${hasItems?"":"disabled"}>&#9986; Dividir cuenta</button>
+      <button class="btn-sec" style="margin-bottom:6px;${hasItems?"":"opacity:0.5;cursor:not-allowed"}" onclick="${hasItems?"mostrarTransferirMesa()":""}" ${hasItems?"":"disabled"}>⇄ Transferir</button>
       <button class="btn-sec" onclick="closeMesa()">Cancelar</button>
     </div>
   </div>`;
@@ -803,6 +863,7 @@ function selPay(m){payMethod=m;efBilletes={};renderMesaModal();}
 
 /* ── PIN COBRO ── */
 function showPinCobro(cb){
+  if(activeUser){cb(activeUser.name);return;}
   pinCobroCb=cb;pinCobroStr="";pinCobroUserId=null;
   const old=document.getElementById("pinCobroModal");if(old)old.remove();
   const div=document.createElement("div");div.className="overlay-bg";div.id="pinCobroModal";div.style.zIndex="300";
@@ -916,7 +977,7 @@ function showResultado(total,recibido,vuelto,vueltoDesg,cobradoPor){
   document.body.appendChild(div);
 }
 function cerrarResultado(){const m=document.getElementById("resOverlay");if(m)m.remove();renderSalon();}
-function closeMesa(){["mesaModal","efModal","splitModal","pinCobroModal"].forEach(id=>{const m=document.getElementById(id);if(m)m.remove();});activeMesa=null;renderSalon();}
+function closeMesa(){["mesaModal","efModal","splitModal","splitEfModal","pinCobroModal"].forEach(id=>{const m=document.getElementById(id);if(m)m.remove();});activeMesa=null;splitEfQueue=[];splitEfBilletes={};renderSalon();}
 
 /* ── DIVIDIR CUENTA (por platillos) ── */
 const GRP_BG  =['#E1F5EE','#E6F1FB','#FAEEDA','#EEEDFE','#FBEAF0'];
@@ -1014,6 +1075,18 @@ function showSplitModal(){
 }
 
 function closeSplitModal(){const m=document.getElementById("splitModal");if(m)m.remove();}
+function mostrarTransferirMesa(){
+  const libres=mesas.filter(m=>m!==activeMesa&&(!orders[m]||!orders[m].items||!orders[m].items.length));
+  if(!libres.length){toast('No hay mesas libres para transferir');return;}
+  const destino=prompt('Transferir a qué mesa?\nMesas libres: '+libres.join(', '));
+  if(!destino||!libres.includes(destino.trim())){toast('Mesa no válida');return;}
+  const d=destino.trim();
+  orders[d]=orders[activeMesa];
+  orders[activeMesa]={items:[]};
+  if(mesasOpenedAt[activeMesa]){mesasOpenedAt[d]=mesasOpenedAt[activeMesa];delete mesasOpenedAt[activeMesa];}
+  saveLS();closeMesa();
+  toast('Orden transferida a '+d);
+}
 function addGroup(){splitGroups.push({id:nextGroupId++,name:'Persona '+(splitGroups.length+1),method:'Efectivo'});showSplitModal();}
 function removeGroup(gid){
   splitGroups=splitGroups.filter(g=>g.id!==gid);
@@ -1030,16 +1103,94 @@ function adjustIG(iid,gid,delta){
   setSA(iid,gid,Math.max(0,cur+delta));
   showSplitModal();
 }
-function iniciarCobroSplit(){showPinCobro(cp=>confirmarPagoSplit(cp));}
-function confirmarPagoSplit(cobradoPor){
+function iniciarCobroSplit(){
+  closeSplitModal();
+  showPinCobro(function(cp){
+    splitEfCobradoPor=cp;
+    splitEfBilletes={};
+    splitEfQueue=splitGroups.filter(function(g){return g.method==="Efectivo";}).map(function(g){return{id:g.id,name:g.name,amount:getGroupTotal(g.id)};});
+    if(splitEfQueue.length>0){processSplitEfQueue();}
+    else{finalizarPagoSplit(cp);}
+  });
+}
+function processSplitEfQueue(){
+  if(splitEfQueue.length===0){finalizarPagoSplit(splitEfCobradoPor);return;}
+  const grupo=splitEfQueue[0];
+  showSplitEfModal(grupo);
+}
+function showSplitEfModal(grupo){
+  const old=document.getElementById("splitEfModal");if(old)old.remove();
+  const billetes=splitEfBilletes[grupo.id]||{};
+  const recibido=Object.entries(billetes).reduce(function(a,e){return a+parseInt(e[0])*e[1];},0);
+  const vuelto=recibido-grupo.amount;
+  const billetesHtml=DENOMINACIONES.map(function(d){
+    const cnt=billetes[d.val]||0;const esB=d.val>=1000;
+    return'<div class="billete-btn" onclick="addSplitBillete('+d.val+','+grupo.id+')" style="background:'+(esB?"#FAEEDA":"#E6F1FB")+';border-color:'+(esB?"#EF9F27":"#85B7EB")+'">'+
+      (cnt>0?'<div class="billete-count">'+cnt+'</div>':'')+
+      '<div class="billete-val" style="color:'+(esB?"#633806":"#0C447C")+'">'+fmt(d.val)+'</div>'+
+      '<div class="billete-tipo" style="color:'+(esB?"#854F0B":"#185FA5")+'">'+d.lbl+'</div>'+
+    '</div>';
+  }).join("");
+  const desgloseRows=DENOMINACIONES.filter(function(d){return billetes[d.val]>0;}).map(function(d){
+    return'<div class="desglose-row"><span style="flex:1;color:#666">'+fmt(d.val)+'</span><span style="font-weight:600;color:#111;min-width:30px;text-align:center">'+billetes[d.val]+'&times;</span><span style="color:#666;min-width:65px;text-align:right">'+fmt(d.val*billetes[d.val])+'</span><button class="desglose-x" onclick="remSplitBillete('+d.val+','+grupo.id+')">&times;</button></div>';
+  }).join("");
+  let vueltoTxt="&mdash;",vueltoClass="azul";
+  if(recibido>0&&vuelto===0)vueltoTxt="Exacto";
+  else if(vuelto>0){vueltoTxt=fmt(vuelto);vueltoClass="verde";}
+  else if(vuelto<0){vueltoTxt="Falta "+fmt(Math.abs(vuelto));vueltoClass="rojo";}
+  const canConfirm=recibido>=grupo.amount&&recibido>0;
+  const remaining=splitEfQueue.length;
+  const div=document.createElement("div");div.className="overlay-bg";div.id="splitEfModal";div.style.zIndex="210";
+  div.innerHTML='<div class="ef-modal">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+      '<div><div style="font-size:15px;font-weight:600;color:#111">Efectivo &mdash; '+grupo.name+'</div>'+
+        (remaining>1?'<div style="font-size:11px;color:#999">'+remaining+' persona(s) con efectivo pendiente</div>':'')+
+      '</div>'+
+    '</div>'+
+    '<div class="totbar">'+
+      '<div class="totbox"><div class="totbox-lbl">A cobrar</div><div class="totbox-val azul">'+fmt(grupo.amount)+'</div></div>'+
+      '<div class="totbox"><div class="totbox-lbl">Recibido</div><div class="totbox-val verde">'+(recibido?fmt(recibido):"&mdash;")+'</div></div>'+
+      '<div class="totbox"><div class="totbox-lbl">'+(vuelto<0?"Falta":"Vuelto")+'</div><div class="totbox-val '+vueltoClass+'">'+vueltoTxt+'</div></div>'+
+    '</div>'+
+    '<div style="font-size:11px;font-weight:600;color:#999;margin-bottom:8px">Toca para sumar &mdash; cada toque agrega una unidad</div>'+
+    '<div class="billete-grid">'+billetesHtml+'</div>'+
+    (desgloseRows?'<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:4px">Desglose recibido</div><div class="desglose">'+desgloseRows+'</div>':'')+
+    '<div style="display:flex;gap:8px;margin-top:8px">'+
+      '<button class="btn-sec" style="width:auto;padding:8px 16px" onclick="limpiarSplitBilletes('+grupo.id+')">Limpiar</button>'+
+      '<button class="btn-cobrar" style="margin:0;'+(canConfirm?'':'background:#bbb;cursor:default')+'" '+(canConfirm?'':'disabled')+' onclick="confirmarSplitEf('+grupo.id+')">'+(canConfirm?'&check; Confirmar':'Monto insuficiente')+'</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(div);
+}
+function addSplitBillete(v,gid){if(!splitEfBilletes[gid])splitEfBilletes[gid]={};splitEfBilletes[gid][v]=(splitEfBilletes[gid][v]||0)+1;showSplitEfModal(splitEfQueue[0]);}
+function remSplitBillete(v,gid){if(splitEfBilletes[gid]&&splitEfBilletes[gid][v]>0)splitEfBilletes[gid][v]--;if(splitEfBilletes[gid]&&!splitEfBilletes[gid][v])delete splitEfBilletes[gid][v];showSplitEfModal(splitEfQueue[0]);}
+function limpiarSplitBilletes(gid){splitEfBilletes[gid]={};showSplitEfModal(splitEfQueue[0]);}
+function confirmarSplitEf(gid){
+  const old=document.getElementById("splitEfModal");if(old)old.remove();
+  splitEfQueue.shift();
+  processSplitEfQueue();
+}
+function finalizarPagoSplit(cobradoPor){
   const ord=orders[activeMesa];const{sub,descMonto,servMonto,tax,total}=getTotal();
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  const pagos=splitGroups.map(g=>({name:g.name,method:g.method,amount:getGroupTotal(g.id)}));
+  const pagos=splitGroups.map(function(g){
+    const billetes=splitEfBilletes[g.id]||{};
+    const recibido=g.method==="Efectivo"?Object.entries(billetes).reduce(function(a,e){return a+parseInt(e[0])*e[1];},0):getGroupTotal(g.id);
+    const vuelto=g.method==="Efectivo"?Math.max(0,recibido-getGroupTotal(g.id)):0;
+    return{name:g.name,method:g.method,amount:getGroupTotal(g.id),recibido,vuelto,billetes};
+  });
+  // update caja billetes for efectivo groups
+  for(const p of pagos){
+    if(p.method==="Efectivo"){
+      for(const[v,c]of Object.entries(p.billetes||{}))cajaBilletes[v]=(cajaBilletes[v]||0)+c;
+      if(p.vuelto>0){const vd=calcVueltoDesglose(p.vuelto);for(const vv of vd)cajaBilletes[vv.val]=Math.max(0,(cajaBilletes[vv.val]||0)-vv.cnt);}
+    }
+  }
   ventas.push({id:nextVid++,hora:hm,fecha:now.toISOString().slice(0,10),mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
   orders[activeMesa]={items:[]};
-  splitGroups=[];splitAssignment={};
+  splitGroups=[];splitAssignment={};splitEfBilletes={};splitEfQueue=[];
   const ventaGuardada=ventas[ventas.length-1];
-  saveLS();closeSplitModal();closeMesa();
+  saveLS();closeMesa();
   showTicket(ventaGuardada);
 }
 function showResultadoSplit(pagos,cobradoPor,total){
@@ -1066,6 +1217,52 @@ function showResultadoSplit(pagos,cobradoPor,total){
 function setVentasFiltro(emp){ventasFiltro=emp;renderVentas();}
 function setVentasMesFiltro(m){ventasMesFiltro=m;ventasDiaFiltro=null;ventasFiltro=null;renderVentas();}
 function setVentasDiaFiltro(d){ventasDiaFiltro=d;ventasFiltro=null;renderVentas();}
+
+/* ── CALENDARIO ── */
+function buildCalHTML(year,month,datesV,datesC,selDate,prevFn,nextFn,dayFn,leyenda){
+  const NMlargo=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const DIAS=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
+  const firstDay=new Date(year,month-1,1).getDay();
+  const daysInMonth=new Date(year,month,0).getDate();
+  const today=new Date().toISOString().slice(0,10);
+  let cells='';
+  for(let i=0;i<firstDay;i++)cells+='<div class="cal-cell"></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const iso=year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const hasV=datesV.has(iso);const hasC=datesC.has(iso);
+    const isSel=selDate===iso;const isToday=iso===today;
+    let cls='cal-cell';
+    if(hasV||hasC)cls+=' cal-activo';
+    if(isSel)cls+=' cal-sel';
+    else if(hasV&&hasC)cls+=' cal-ambos';
+    else if(hasV)cls+=' cal-verde';
+    else if(hasC)cls+=' cal-ambar';
+    if(isToday)cls+=' cal-hoy';
+    const dot=(hasV?'<div class="cal-pv'+(isSel?' cal-psel':'')+'"></div>':'')+(hasC?'<div class="cal-pc'+(isSel?' cal-psel':'')+'"></div>':'');
+    const click=(hasV||hasC)?'onclick="'+dayFn+'(\''+iso+'\')"':'';
+    cells+='<div class="'+cls+'" '+click+'><span class="cal-n">'+d+'</span>'+(dot?'<div class="cal-dots">'+dot+'</div>':'')+'</div>';
+  }
+  const hdr=DIAS.map(function(d){return'<div class="cal-hcell">'+d+'</div>';}).join('');
+  const ley=leyenda||'';
+  return '<div class="cal-wrap">'+
+    '<div class="cal-nav">'+
+      '<button class="cal-arr" onclick="'+prevFn+'()">&#8249;</button>'+
+      '<div class="cal-mes-lbl">'+NMlargo[month-1]+' '+year+'</div>'+
+      '<button class="cal-arr" onclick="'+nextFn+'()">&#8250;</button>'+
+    '</div>'+
+    '<div class="cal-hdr">'+hdr+'</div>'+
+    '<div class="cal-body">'+cells+'</div>'+
+    (ley?'<div class="cal-legend">'+ley+'</div>':'')+
+  '</div>';
+}
+/* Ventas calendar nav */
+function calVentasPrev(){const[y,m]=calVentasMes.split('-').map(Number);const d=new Date(y,m-2,1);calVentasMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderVentas();}
+function calVentasNext(){const[y,m]=calVentasMes.split('-').map(Number);const d=new Date(y,m,1);calVentasMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderVentas();}
+function calVentasClickDia(iso){if(ventasDiaFiltro===iso){ventasDiaFiltro=null;}else{ventasDiaFiltro=iso;calVentasMes=iso.slice(0,7);}ventasFiltro=null;renderVentas();}
+/* Cierres calendar nav */
+function calCierresPrev(){const[y,m]=calCierresMes.split('-').map(Number);const d=new Date(y,m-2,1);calCierresMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderCierre();}
+function calCierresNext(){const[y,m]=calCierresMes.split('-').map(Number);const d=new Date(y,m,1);calCierresMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderCierre();}
+function calCierresClickDia(iso){calCierresSelDia=calCierresSelDia===iso?null:iso;renderCierre();}
 function reprintTiquete(v){
   const w=window.open('','_blank','width=420,height=650');
   if(!w){toast('Permite ventanas emergentes para imprimir');return;}
@@ -1074,62 +1271,95 @@ function reprintTiquete(v){
   setTimeout(()=>{w.print();},400);
 }
 function renderVentas(){
-  const today=new Date().toISOString().slice(0,10);
   const NM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const fmtMes=ym=>{const[y,m]=ym.split('-');return NM[parseInt(m)-1]+' '+y;};
-  const fmtDia=d=>{const[,m,dd]=d.split('-');return dd+' '+NM[parseInt(m)-1];};
-  const allMonths=[...new Set(ventas.map(v=>v.fecha?v.fecha.slice(0,7):null).filter(Boolean))].sort().reverse();
-  const monthPool=ventasMesFiltro
-    ?ventas.filter(v=>v.fecha&&v.fecha.slice(0,7)===ventasMesFiltro)
-    :ventas.filter(v=>!v.fecha||v.fecha===today);
-  const allDays=ventasMesFiltro
-    ?[...new Set(monthPool.map(v=>v.fecha).filter(Boolean))].sort().reverse()
-    :[];
-  const pool=ventasDiaFiltro?monthPool.filter(v=>v.fecha===ventasDiaFiltro):monthPool;
+  const NMlargo=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const fmtDia=function(d){const pts=d.split('-');return pts[2]+' '+NM[parseInt(pts[1])-1];};
+  // Sync calVentasMes if ventasDiaFiltro was set from outside
+  if(ventasDiaFiltro)calVentasMes=ventasDiaFiltro.slice(0,7);
+  const[cy,cm]=calVentasMes.split('-').map(Number);
+  // Build pool based on calendar month or selected day
+  const pool=ventasDiaFiltro
+    ?ventas.filter(function(v){return v.fecha===ventasDiaFiltro;})
+    :ventas.filter(function(v){return v.fecha&&v.fecha.slice(0,7)===calVentasMes;});
+  // Calendar
   const fb=document.getElementById("ventasFiltroBar");
   if(fb){
-    const bs=(active)=>`padding:5px 10px;border-radius:8px;border:1px solid ${active?'#1D9E75':'#ddd'};background:${active?'#E1F5EE':'transparent'};color:${active?'#085041':'#666'};font-size:12px;cursor:pointer;font-weight:${active?600:400}`;
-    const mesBar=allMonths.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-bottom:6px;border-bottom:1px solid #eee;margin-bottom:6px">
-      <span style="font-size:11px;color:#999;font-weight:600;min-width:30px">MES</span>
-      <button onclick="setVentasMesFiltro(null)" style="${bs(!ventasMesFiltro)}">Hoy</button>
-      ${allMonths.map(m=>`<button onclick="setVentasMesFiltro('${m}')" style="${bs(ventasMesFiltro===m)}">${fmtMes(m)}</button>`).join('')}
-    </div>`:'';
-    const diaBar=allDays.length>1?`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-bottom:6px;border-bottom:1px solid #eee;margin-bottom:6px">
-      <span style="font-size:11px;color:#999;font-weight:600;min-width:30px">DIA</span>
-      <button onclick="setVentasDiaFiltro(null)" style="${bs(!ventasDiaFiltro)}">Todo el mes</button>
-      ${allDays.map(d=>`<button onclick="setVentasDiaFiltro('${d}')" style="${bs(ventasDiaFiltro===d)}">${fmtDia(d)}</button>`).join('')}
-    </div>`:'';
-    const empleados=[...new Set(pool.map(v=>v.cobradoPor).filter(e=>e&&e!=="&mdash;"))];
-    const empBar=empleados.length>1?`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-bottom:6px">
-      <span style="font-size:11px;color:#999;font-weight:600;min-width:30px">EMP</span>
-      <button onclick="setVentasFiltro(null)" style="${bs(!ventasFiltro)}">Todos</button>
-      ${empleados.map(e=>`<button onclick="setVentasFiltro('${e.replace(/'/g,"\\'")}')" style="${bs(ventasFiltro===e)}">${e}</button>`).join('')}
-    </div>`:'';
-    fb.innerHTML=mesBar+diaBar+empBar;
+    const datesV=new Set(ventas.map(function(v){return v.fecha;}).filter(Boolean));
+    const leyenda='<span><div style="width:10px;height:10px;border-radius:50%;background:#1D9E75;display:inline-block"></div> Días con ventas</span>';
+    const calHtml=buildCalHTML(cy,cm,datesV,new Set(),ventasDiaFiltro||null,'calVentasPrev','calVentasNext','calVentasClickDia',leyenda);
+    const bs=function(a){return'padding:5px 10px;border-radius:8px;border:1px solid '+(a?'#1D9E75':'#ddd')+';background:'+(a?'#E1F5EE':'transparent')+';color:'+(a?'#085041':'#666')+';font-size:12px;cursor:pointer;font-weight:'+(a?600:400);};
+    const todoBtn=ventasDiaFiltro?'<button class="cal-todo-btn" onclick="calVentasClickDia(\''+ventasDiaFiltro+'\')">Ver todo '+NMlargo[cm-1]+'</button>':'';
+    const empleados=[...new Set(pool.map(function(v){return v.cobradoPor;}).filter(function(e){return e&&e!=="&mdash;";}))];
+    const empBar=empleados.length>1?'<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding:6px 0 4px">'+
+      '<span style="font-size:11px;color:#999;font-weight:600;min-width:30px">EMP</span>'+
+      '<button onclick="setVentasFiltro(null)" style="'+bs(!ventasFiltro)+'">Todos</button>'+
+      empleados.map(function(e){return'<button onclick="setVentasFiltro(\''+e.replace(/'/g,"\\'")+'\')" style="'+bs(ventasFiltro===e)+'">'+e+'</button>';}).join('')+
+    '</div>':'';
+    fb.innerHTML=calHtml+todoBtn+empBar;
   }
-  const vf=ventasFiltro?pool.filter(v=>v.cobradoPor===ventasFiltro):pool;
-  const ef=vf.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
-  const tc=vf.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
-  const si=vf.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
-  const dv=vf.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
-  const label=ventasDiaFiltro?fmtDia(ventasDiaFiltro):(ventasMesFiltro?fmtMes(ventasMesFiltro):(ventasFiltro?'('+ventasFiltro+')':'de hoy'));
-  document.getElementById("ventasMetrics").innerHTML=`
-    <div class="metric"><div class="metric-lbl">Total ${label}</div><div class="metric-val">${fmt(ef+tc+si+dv)}</div></div>
-    <div class="metric"><div class="metric-lbl">Efectivo</div><div class="metric-val">${fmt(ef)}</div></div>
-    <div class="metric"><div class="metric-lbl">Tarjeta</div><div class="metric-val">${fmt(tc)}</div></div>
-    <div class="metric"><div class="metric-lbl">SINPE</div><div class="metric-val">${fmt(si)}</div></div>
-    <div class="metric"><div class="metric-lbl">Dividido</div><div class="metric-val">${fmt(dv)}</div></div>`;
+  const vf=ventasFiltro?pool.filter(function(v){return v.cobradoPor===ventasFiltro;}):pool;
+  const ef=vf.filter(function(v){return v.metodo==="Efectivo";}).reduce(function(a,v){return a+v.total;},0);
+  const tc=vf.filter(function(v){return v.metodo==="Tarjeta";}).reduce(function(a,v){return a+v.total;},0);
+  const si=vf.filter(function(v){return v.metodo==="SINPE";}).reduce(function(a,v){return a+v.total;},0);
+  const dv=vf.filter(function(v){return v.metodo==="Dividido";}).reduce(function(a,v){return a+v.total;},0);
+  const label=ventasDiaFiltro?fmtDia(ventasDiaFiltro):(NMlargo[cm-1]+' '+cy);
+  document.getElementById("ventasMetrics").innerHTML=
+    '<div class="metric"><div class="metric-lbl">Total '+label+'</div><div class="metric-val">'+fmt(ef+tc+si+dv)+'</div></div>'+
+    '<div class="metric"><div class="metric-lbl">Efectivo</div><div class="metric-val">'+fmt(ef)+'</div></div>'+
+    '<div class="metric"><div class="metric-lbl">Tarjeta</div><div class="metric-val">'+fmt(tc)+'</div></div>'+
+    '<div class="metric"><div class="metric-lbl">SINPE</div><div class="metric-val">'+fmt(si)+'</div></div>'+
+    '<div class="metric"><div class="metric-lbl">Dividido</div><div class="metric-val">'+fmt(dv)+'</div></div>';
+  // Update card title
+  const cardTitle=document.querySelector('#screen-ventas .section-title');
+  if(cardTitle)cardTitle.textContent='Ventas — '+label;
   const tbody=document.getElementById("ventasTbody");
-  if(!vf.length){tbody.innerHTML=`<tr><td colspan="9" class="empty">Sin ventas para este filtro</td></tr>`;return;}
-  const ic={Efectivo:"💵",Tarjeta:"💳",SINPE:"📱"};
-  tbody.innerHTML=vf.map(v=>{
+  if(!vf.length){
+    tbody.innerHTML='<tr><td colspan="9" class="empty">Sin ventas para '+(ventasDiaFiltro?'este día':'este mes')+'</td></tr>';
+    const mvBox=document.getElementById("masVendidosBox");if(mvBox)mvBox.innerHTML='';
+    return;
+  }
+  const ic={Efectivo:'💵',Tarjeta:'💳',SINPE:'📱'};
+  tbody.innerHTML=vf.map(function(v){
     const badge=v.metodo==="Efectivo"?"bg-ef":v.metodo==="Tarjeta"?"bg-tc":v.metodo==="SINPE"?"bg-si":"bg-div";
-    const extra=v.pagos?`<div style="font-size:10px;color:#888;margin-top:2px">${v.pagos.map(p=>`${ic[p.method]||""}${fmt(p.amount)}`).join(" + ")}</div>`:"";
-    const descBadge=v.descMonto>0?`<div style="font-size:10px;color:#E24B4A">desc. ${fmt(v.descMonto)}</div>`:"";
+    const extra=v.pagos?'<div style="font-size:10px;color:#888;margin-top:2px">'+v.pagos.map(function(p){return(ic[p.method]||'')+fmt(p.amount);}).join(' + ')+'</div>':"";
+    const descBadge=v.descMonto>0?'<div style="font-size:10px;color:#E24B4A">desc. '+fmt(v.descMonto)+'</div>':"";
     const vi=ventas.indexOf(v);
     const canDelete=activeUser&&activeUser.role==="admin";
-    return`<tr><td style="font-size:11px;color:#888">${v.fecha||'&mdash;'}</td><td>${v.hora}</td><td>${v.mesa}</td><td><span class="badge ${badge}">${v.metodo}</span>${extra}</td><td>${v.cobradoPor||"&mdash;"}</td><td>${fmt(v.recibido)}</td><td>${v.vuelto>0?fmt(v.vuelto):"&mdash;"}</td><td><strong>${fmt(v.total)}</strong>${descBadge}</td><td style="display:flex;gap:4px;align-items:center"><button onclick="reprintTiquete(ventas[${vi}])" title="Reimprimir tiquete" style="background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">🖨</button>${canDelete?`<button onclick="borrarVenta(${vi})" title="Eliminar venta" style="background:none;border:1px solid #fcc;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px;color:#c0392b">🗑</button>`:""}</td></tr>`;
-  }).join("");
+    return'<tr>'+
+      '<td style="font-size:11px;color:#888">'+(v.fecha||'&mdash;')+'</td>'+
+      '<td>'+v.hora+'</td>'+
+      '<td>'+v.mesa+'</td>'+
+      '<td><span class="badge '+badge+'">'+v.metodo+'</span>'+extra+'</td>'+
+      '<td>'+(v.cobradoPor||'&mdash;')+'</td>'+
+      '<td>'+fmt(v.recibido)+'</td>'+
+      '<td>'+(v.vuelto>0?fmt(v.vuelto):'&mdash;')+'</td>'+
+      '<td><strong>'+fmt(v.total)+'</strong>'+descBadge+'</td>'+
+      '<td style="display:flex;gap:4px;align-items:center">'+
+        '<button onclick="reprintTiquete(ventas['+vi+'])" title="Reimprimir tiquete" style="background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">🖸</button>'+
+        (canDelete?'<button onclick="borrarVenta('+vi+')" title="Eliminar venta" style="background:none;border:1px solid #fcc;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px;color:#c0392b">🗑</button>':'')+
+      '</td>'+
+    '</tr>';
+  }).join('');
+  // Más vendidos
+  const itemCounts={};
+  vf.forEach(function(v){
+    if(v.items)v.items.forEach(function(it){
+      if(!itemCounts[it.name])itemCounts[it.name]={qty:0,total:0};
+      itemCounts[it.name].qty+=it.qty;
+      itemCounts[it.name].total+=it.price*it.qty;
+    });
+  });
+  const sorted=Object.entries(itemCounts).sort(function(a,b){return b[1].qty-a[1].qty;}).slice(0,10);
+  const mvBox=document.getElementById("masVendidosBox");
+  if(mvBox&&sorted.length){
+    mvBox.innerHTML='<div style="font-size:13px;font-weight:700;color:#555;margin-bottom:8px">🏆 Más vendidos del período</div>'+
+      sorted.map(function(e,i){
+        return'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f0f0">'+
+          '<span style="font-size:13px"><b style="color:#1D9E75">'+(i+1)+'.</b> '+e[0]+'</span>'+
+          '<span style="font-size:13px;color:#666">'+e[1].qty+' uds &middot; '+fmt(e[1].total)+'</span>'+
+        '</div>';
+      }).join('');
+  }else if(mvBox){mvBox.innerHTML='';}
 }
 
 function borrarVenta(idx){
@@ -1150,10 +1380,55 @@ function addGasto(){
   document.getElementById("gDesc").value="";document.getElementById("gMonto").value="";
   saveLS();renderGastos();toast("Gasto registrado");
 }
+/* Gastos calendar nav */
+function calGastosPrev(){const[y,m]=calGastosMes.split('-').map(Number);const d=new Date(y,m-2,1);calGastosMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderGastos();}
+function calGastosNext(){const[y,m]=calGastosMes.split('-').map(Number);const d=new Date(y,m,1);calGastosMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderGastos();}
+function calGastosClickDia(iso){calGastosSelDia=calGastosSelDia===iso?null:iso;calGastosMes=iso.slice(0,7);renderGastos();}
 function renderGastos(){
+  const NM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const NMlargo=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  // Build combined gastos from today + cierres history
+  const today=new Date().toISOString().slice(0,10);
+  const histGastos=cierres.reduce(function(arr,c){return arr.concat((c.gastosList||[]).map(function(g){return Object.assign({},g,{fechaCierre:c.fechaISO});
+  }));;},[]);
+  const todayGastos=gastos.map(function(g){return Object.assign({},g,{fechaCierre:today});});
+  const allGastos=histGastos.concat(todayGastos);
+  const datesG=new Set(allGastos.map(function(g){return g.fecha||g.fechaCierre;}).filter(Boolean));
+  // Calendar
+  const[cy,cm]=calGastosMes.split('-').map(Number);
+  const calContainer=document.getElementById("gastosCalContainer");
+  if(calContainer){
+    const leyenda='<span><div style="width:10px;height:10px;border-radius:50%;background:#F59E0B;display:inline-block"></div> Días con gastos</span>';
+    const calHtml=buildCalHTML(cy,cm,new Set(),datesG,calGastosSelDia,'calGastosPrev','calGastosNext','calGastosClickDia',leyenda);
+    const todoBtn=calGastosSelDia?'<button class="cal-todo-btn" onclick="calGastosClickDia(\''+calGastosSelDia+'\')">Ver todo '+NMlargo[cm-1]+'</button>':'';
+    calContainer.innerHTML='<div class="card">'+calHtml+todoBtn+'</div>';
+  }
+  // Determine which gastos to show
+  const gPool=calGastosSelDia
+    ?allGastos.filter(function(g){return (g.fecha||g.fechaCierre)===calGastosSelDia;})
+    :allGastos.filter(function(g){return (g.fecha||g.fechaCierre)&&(g.fecha||g.fechaCierre).slice(0,7)===calGastosMes;});
+  const tituloEl=document.getElementById("gastosTituloCard");
+  if(tituloEl){
+    if(calGastosSelDia){const pts=calGastosSelDia.split('-');tituloEl.textContent='Gastos del '+pts[2]+' '+NM[parseInt(pts[1])-1]+' '+pts[0];}
+    else{tituloEl.textContent='Gastos — '+NMlargo[cm-1]+' '+cy;}
+  }
+  const totalG=gPool.reduce(function(a,g){return a+g.monto;},0);
   const tbody=document.getElementById("gastosTbody");
-  if(!gastos.length){tbody.innerHTML=`<tr><td colspan="4" class="empty">Sin gastos registrados hoy</td></tr>`;return;}
-  tbody.innerHTML=gastos.map(g=>{const t=GASTO_TIPOS[g.tipo]||GASTO_TIPOS.caja;return`<tr><td>${g.hora}</td><td>${g.desc}</td><td><span class="badge ${t.cls}">${t.lbl}</span></td><td>${fmt(g.monto)}</td></tr>`;}).join("");
+  if(!gPool.length){
+    tbody.innerHTML='<tr><td colspan="5" class="empty">Sin gastos para '+(calGastosSelDia?'este día':'este mes')+'</td></tr>';
+    return;
+  }
+  tbody.innerHTML=gPool.map(function(g){
+    const t=GASTO_TIPOS[g.tipo]||GASTO_TIPOS.caja;
+    return'<tr>'+
+      '<td>'+(g.fecha||g.fechaCierre||'&mdash;')+'</td>'+
+      '<td>'+g.hora+'</td>'+
+      '<td>'+g.desc+'</td>'+
+      '<td><span class="badge '+t.cls+'">'+t.lbl+'</span></td>'+
+      '<td>'+fmt(g.monto)+'</td>'+
+    '</tr>';
+  }).join('')+
+  '<tr style="background:#f5f5f5"><td colspan="4" style="text-align:right;font-weight:700;font-size:12px;color:#555">Total:</td><td style="font-weight:700">'+fmt(totalG)+'</td></tr>';
 }
 
 /* ── CIERRE ── */
@@ -1167,47 +1442,131 @@ function renderCierre(){
   const gastoSinpe=gastos.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
   const gastoTransf=gastos.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
   const totalVentas=ef+tc+si+dv;
-  const efectivoCaja=ef-gastoCaja;
   const cajainicial=totalCajainicial();
+  // Efectivo neto ganado en caja (ventas ef menos lo que se pagó con caja)
+  const efNeto=ef-gastoCaja;
+  // Efectivo total en caja al cierre
+  const efEnCaja=cajainicial+efNeto;
+  // Utilidad = efectivo ganado + tarjeta + sinpe + dividido
+  // (Los gastos fuerte/sinpe/transf son externos, no afectan la utilidad del día)
+  const utilidad=efNeto+tc+si+dv;
   const box=document.getElementById("cierreBox");
   if(!box)return;
-  const r=(l,v,bold)=>`<div style="display:flex;justify-content:space-between;padding:5px 0;${bold?"font-weight:700;border-top:1px solid #ddd;margin-top:4px;font-size:15px":"font-size:14px"}"><span style="color:#555">${l}</span><span style="color:#111">${fmt(v)}</span></div>`;
-  box.innerHTML=`
-    <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">VENTAS DEL DIA</div>
-      ${r("Ordenes atendidas",""+ventas.length)}
-      ${ef?r("Efectivo:",ef):""}
-      ${tc?r("Tarjeta:",tc):""}
-      ${si?r("SINPE:",si):""}
-      ${dv?r("Dividido:",dv):""}
-      ${r("TOTAL VENTAS:",totalVentas,true)}
-    </div>
-    <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">EFECTIVO EN CAJA</div>
-      ${r("Ventas efectivo:",ef)}
-      ${gastoCaja?r("Gastos de caja: -",gastoCaja):""}
-      ${r("EFECTIVO NETO EN CAJA:",efectivoCaja,true)}
-      ${cajainicial?r("Caja inicial del dia:",cajainicial):""}
-      ${cajainicial?r("Efectivo a guardar:",Math.max(0,efectivoCaja-cajainicial),true):""}
-    </div>
-    ${gastos.length?`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">GASTOS DEL DIA</div>
-      ${gastos.map(g=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:#555">${g.desc} <span style="font-size:11px;color:#999">(${g.tipo})</span></span><span style="color:#c0392b;font-weight:600">- ${fmt(g.monto)}</span></div>`).join("")}
-    </div>`:""}
-    ${Object.keys(cajaBilletes).length?`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">DESGLOSE FISICO DE CAJA</div>
-      ${DENOMINACIONES.filter(d=>cajaBilletes[d.val]>0).map(d=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span style="color:#555">${fmt(d.val)} x ${cajaBilletes[d.val]}</span><span style="color:#111;font-weight:600">${fmt(d.val*cajaBilletes[d.val])}</span></div>`).join("")}
-      <div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:700;border-top:1px solid #ddd;margin-top:4px"><span>Total fisico:</span><span>${fmt(Object.entries(cajaBilletes).reduce((a,[v,c])=>a+parseInt(v)*c,0))}</span></div>
-    </div>`:""}
-  `;
+  const row=function(l,v,opts){
+    opts=opts||{};
+    return'<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:14px'+(opts.bold?';font-weight:700;border-top:1px solid #ddd;margin-top:4px;font-size:15px':'')+(opts.color?';color:'+opts.color:'')+'">'+
+      '<span style="color:'+(opts.bold?'inherit':'#555')+'">'+l+'</span>'+
+      '<span>'+fmt(v)+'</span>'+
+    '</div>';
+  };
+  const gastosCajaList=gastos.filter(function(g){return g.tipo==="caja";});
+  const gastosExternosList=gastos.filter(function(g){return g.tipo!=="caja";});
+  box.innerHTML=
+    // VENTAS
+    '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:10px">'+
+      '<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">VENTAS DEL DÍA</div>'+
+      '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#888"><span>Órdenes atendidas</span><span>'+ventas.length+'</span></div>'+
+      (ef?row('Efectivo',ef):'')+(tc?row('Tarjeta',tc):'')+(si?row('SINPE',si):'')+(dv?row('Dividido',dv):'')+
+      row('TOTAL VENTAS',totalVentas,{bold:true})+
+    '</div>'+
+    // EFECTIVO EN CAJA
+    '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:10px">'+
+      '<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">EFECTIVO EN CAJA</div>'+
+      row('Caja inicial',cajainicial)+
+      row('Ventas en efectivo',ef)+
+      (gastoCaja?row('Gastos de caja  −',gastoCaja,{color:'#c0392b'}):'') +
+      row('Efectivo final en caja',efEnCaja,{bold:true})+
+      '<div style="font-size:11px;color:#888;margin-top:6px;padding-top:6px;border-top:1px dashed #eee">Efectivo de más sobre la caja inicial: <b style="color:#1D9E75">'+fmt(efNeto)+'</b></div>'+
+    '</div>'+
+    // GASTOS (si hay)
+    (gastos.length?
+      '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:10px">'+
+        '<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">GASTOS DEL DÍA</div>'+
+        gastos.map(function(g){
+          const t=GASTO_TIPOS[g.tipo]||GASTO_TIPOS.caja;
+          return'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0">'+
+            '<span style="color:#555">'+g.desc+' <span style="font-size:10px;background:#f0f0f0;border-radius:4px;padding:1px 5px">'+t.lbl+'</span></span>'+
+            '<span style="color:#c0392b;font-weight:600">− '+fmt(g.monto)+'</span>'+
+          '</div>';
+        }).join('')+
+        (gastoCaja?'<div style="font-size:11px;color:#888;margin-top:6px;padding-top:4px;border-top:1px dashed #eee">Gastos de caja: <b style="color:#c0392b">'+fmt(gastoCaja)+'</b> &nbsp;|&nbsp; Gastos externos: <b>'+fmt(gastoFuerte+gastoSinpe+gastoTransf)+'</b></div>':'')+
+      '</div>':'')+
+    // UTILIDAD
+    '<div style="background:#E8F5E9;border:2px solid #1D9E75;border-radius:10px;padding:16px;margin-bottom:10px">'+
+      '<div style="font-size:12px;font-weight:700;color:#085041;letter-spacing:.5px;margin-bottom:8px">UTILIDAD DEL DÍA</div>'+
+      row('Efectivo de más (ef − gastos caja)',efNeto)+(tc?row('Tarjeta',tc):'')+(si?row('SINPE',si):'')+(dv?row('Dividido',dv):'')+
+      '<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700;border-top:2px solid #1D9E75;margin-top:4px;font-size:17px;color:#085041">'+
+        '<span>UTILIDAD TOTAL</span><span>'+fmt(utilidad)+'</span>'+
+      '</div>'+
+      '<div style="font-size:11px;color:#555;margin-top:6px">Verificación: Total ventas '+fmt(totalVentas)+' − Gastos caja '+fmt(gastoCaja)+' = '+fmt(totalVentas-gastoCaja)+'</div>'+
+    '</div>'+
+    // DESGLOSE FÍSICO
+    (Object.keys(cajaBilletes).length?
+      '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:10px">'+
+        '<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">DESGLOSE FÍSICO DE CAJA</div>'+
+        DENOMINACIONES.filter(function(d){return cajaBilletes[d.val]>0;}).map(function(d){
+          return'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0">'+
+            '<span style="color:#555">'+fmt(d.val)+' × '+cajaBilletes[d.val]+'</span>'+
+            '<span style="font-weight:600">'+fmt(d.val*cajaBilletes[d.val])+'</span>'+
+          '</div>';
+        }).join('')+
+        '<div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:700;border-top:1px solid #ddd;margin-top:4px">'+
+          '<span>Total físico:</span><span>'+fmt(Object.entries(cajaBilletes).reduce(function(a,e){return a+parseInt(e[0])*e[1];},0))+'</span>'+
+        '</div>'+
+      '</div>':'');
   const hist=document.getElementById("cierreHistorial");
-  if(hist&&cierres.length){
-    hist.innerHTML=`<div style="font-size:14px;font-weight:700;color:#555;margin-bottom:10px">Cierres anteriores</div>`+
-    [...cierres].reverse().slice(0,10).map(c=>`<div style="background:#f9f9f9;border:1px solid #e8e8e8;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-weight:700;color:#333">${c.fecha}</span><span style="font-weight:700;color:#1D9E75">${fmt(c.totalVentas||0)}</span></div>
-      <div style="color:#888;font-size:12px">${c.numVentas||0} ordenes · Efectivo neto: ${fmt(c.efectivoCaja||0)}${c.cajainicial?" · Caja inicial: "+fmt(c.cajainicial):""}</div>
-    </div>`).join("");
-  }else if(hist){hist.innerHTML="";}
+  if(hist){
+    if(!cierres.length){hist.innerHTML='';return;}
+    const NMlargo=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const[cy,cm]=calCierresMes.split('-').map(Number);
+    const datesCierres=new Set(cierres.map(function(c){return c.fechaISO;}).filter(Boolean));
+    const leyenda='<span><div style="width:10px;height:10px;border-radius:50%;background:#F59E0B;display:inline-block"></div> Días con cierre</span>';
+    const calHtml=buildCalHTML(cy,cm,new Set(),datesCierres,calCierresSelDia,'calCierresPrev','calCierresNext','calCierresClickDia',leyenda);
+    // Detail panel for selected day
+    let detHtml='';
+    if(calCierresSelDia){
+      const pts=calCierresSelDia.split('-');
+      const diasNM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      const diaLabel=pts[2]+' '+diasNM[parseInt(pts[1])-1]+' '+pts[0];
+      const cList=cierres.filter(function(x){return x.fechaISO===calCierresSelDia;});
+      if(cList.length){
+        // If multiple cierres same day, show them all stacked
+        detHtml=cList.map(function(c,ci){
+          const badge=cList.length>1?'<span style="font-size:10px;background:#E1F5EE;color:#085041;border-radius:5px;padding:2px 7px;font-weight:700">Cierre '+(ci+1)+'/'+cList.length+'</span> ':'';
+          return '<div class="cierre-det"'+(ci>0?' style="margin-top:6px"':'')+'>'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+              '<div style="font-size:13px;font-weight:700;color:#111">'+badge+diaLabel+'</div>'+
+              '<div style="font-size:14px;font-weight:700;color:#1D9E75">Util. '+fmt(c.utilidad||0)+'</div>'+
+            '</div>'+
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:12px;margin-bottom:7px">'+
+              '<div style="background:#fff;border:1px solid #eee;border-radius:7px;padding:7px">'+
+                '<div style="color:#999;font-size:10px">Ventas totales</div>'+
+                '<div style="font-weight:700;font-size:13px">'+fmt(c.totalVentas||0)+'</div>'+
+                '<div style="color:#666;margin-top:2px;font-size:10px">'+
+                  (c.ef?'💵 '+fmt(c.ef)+' ':'')+(c.tc?'💳 '+fmt(c.tc)+' ':'')+(c.si?'📱 '+fmt(c.si)+' ':'')+
+                '</div>'+
+              '</div>'+
+              '<div style="background:#fff;border:1px solid #eee;border-radius:7px;padding:7px">'+
+                '<div style="color:#999;font-size:10px">Órdenes · Hora</div>'+
+                '<div style="font-weight:700;font-size:13px">'+(c.numVentas||0)+'</div>'+
+                '<div style="color:#666;margin-top:2px;font-size:10px">'+c.fecha+'</div>'+
+              '</div>'+
+            '</div>'+
+            '<div style="font-size:11px;color:#666;display:flex;gap:8px;flex-wrap:wrap">'+
+              '<span>Ef. neto: <b>'+fmt((c.ef||0)-(c.gastoCaja||0))+'</b></span>'+
+              (c.gastoCaja?'<span>Gs. caja: <b style="color:#E24B4A">'+fmt(c.gastoCaja)+'</b></span>':'')+
+              (c.gastoFuerte?'<span>Gs. fuerte: <b style="color:#E24B4A">'+fmt(c.gastoFuerte)+'</b></span>':'')+
+            '</div>'+
+          '</div>';
+        }).join('');
+      }else{
+        detHtml='<div class="cierre-det" style="color:#888;font-size:13px;text-align:center">No hay cierre registrado para este día.</div>';
+      }
+    }
+    hist.innerHTML=
+      '<div style="font-size:14px;font-weight:700;color:#555;margin-bottom:10px">Historial de cierres</div>'+
+      calHtml+detHtml;
+  }
 }
 function hacerCierre(){
   if(!confirm("Confirmar cierre del dia?"))return;
@@ -1223,14 +1582,17 @@ function hacerCierre(){
   const gastoSinpe=gastos.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
   const gastoTransf=gastos.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
   const totalVentas=ef+tc+si+dv;
-  const efectivoCaja=ef-gastoCaja;
   const cajainicial=totalCajainicial();
+  const efNeto=ef-gastoCaja;              // efectivo ganado (ventas ef menos gastos de caja)
+  const efEnCaja=cajainicial+efNeto;      // efectivo total que debería estar en caja
+  const utilidad=efNeto+tc+si+dv;        // utilidad = ef de más + tarjeta + sinpe + dividido
   const cierreData={
     fecha,fechaISO:d.toISOString().slice(0,10),
     numVentas:ventas.length,
     ef,tc,si,dv,totalVentas,
     gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
-    efectivoCaja,cajainicial,
+    efNeto,efEnCaja,cajainicial,
+    utilidad,
     gastosList:[...gastos],
     billetesCaja:{...cajaBilletes}
   };
@@ -1254,8 +1616,8 @@ function setCajainicialDenom(val,monto){
 function showCajaInicialModal(){
   const old=document.getElementById("cajaInicialModal");if(old)old.remove();
   cajainicialBilletes={};
-  const billetes=DENOMINACIONES.filter(d=>d.val>=1000);
-  const monedas=DENOMINACIONES.filter(d=>d.val<1000);
+  const billetes=DENOMINACIONES_CAJA.filter(d=>d.val>=1000);
+  const monedas=DENOMINACIONES_CAJA.filter(d=>d.val<1000);
   const mkRow=d=>{const esB=d.val>=1000;
     const storedCnt=cajainicialBilletes[d.val]||0;
     const storedMonto=storedCnt?storedCnt*d.val:"";
@@ -1325,14 +1687,19 @@ function printCierreReport(c){
     ${row('TOTAL VENTAS:',fmt2(c.totalVentas),true)}
     <hr>
     ${c.gastoCaja?row('Gastos de caja:',' - '+fmt2(c.gastoCaja)):''}
-    ${c.gastoFuerte?row('Gastos caja fuerte:',fmt2(c.gastoFuerte)):''}
-    ${c.gastoSinpe?row('Gastos SINPE:',fmt2(c.gastoSinpe)):''}
-    ${c.gastoTransf?row('Gastos transferencia:',fmt2(c.gastoTransf)):''}
-    ${row('Efectivo neto en caja:',fmt2(c.efectivoCaja),true)}
-    ${c.cajainicial?row('Caja inicial del dia:',fmt2(c.cajainicial)):''}
-    ${c.cajainicial?row('Efectivo a guardar:',fmt2(Math.max(0,c.efectivoCaja-c.cajainicial)),true):''}
+    ${row('Efectivo de mas:',fmt2(c.efNeto!==undefined?c.efNeto:(c.ef||0)-(c.gastoCaja||0)),true)}
+    ${c.cajainicial?row('Caja inicial:',fmt2(c.cajainicial)):''}
+    ${c.cajainicial?row('Efectivo final en caja:',fmt2(c.efEnCaja!==undefined?c.efEnCaja:(c.cajainicial||0)+(c.ef||0)-(c.gastoCaja||0)),true):''}
+    ${c.gastoFuerte?row('Gastos externos (fuerte):',fmt2(c.gastoFuerte)):''}
+    ${c.gastoSinpe?row('Gastos externos (SINPE):',fmt2(c.gastoSinpe)):''}
+    ${c.gastoTransf?row('Gastos externos (transf):',fmt2(c.gastoTransf)):''}
     ${gasHtml}
     <hr>
+    ${row('Ef. de mas:',fmt2(c.efNeto!==undefined?c.efNeto:(c.ef||0)-(c.gastoCaja||0)))}
+    ${c.tc?row('Tarjeta:',fmt2(c.tc)):''}
+    ${c.si?row('SINPE:',fmt2(c.si)):''}
+    ${c.dv?row('Dividido:',fmt2(c.dv)):''}
+    <div style="font-weight:700;text-align:center;font-size:13px;margin-top:6px;border-top:2px solid #000;padding-top:6px">UTILIDAD DEL DIA: ${fmt2(c.utilidad||0)}</div>
     <div style="text-align:center;font-size:11px;color:#888;margin-top:8px">* * * FIN DEL CIERRE * * *</div>
   </body></html>`);
   w.document.close();w.focus();
