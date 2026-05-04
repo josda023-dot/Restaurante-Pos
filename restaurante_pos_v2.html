@@ -699,6 +699,7 @@ function verifyLogin(){
     updateNav();
     goScreen(u.role==="admin"?"salon":(u.allowedScreens[0]||"salon"));
     renderSalon();
+    if(u.role==="admin")setTimeout(checkAutoRespaldo,1500);
   } else {
     for(let i=0;i<4;i++){const d=document.getElementById("lpd"+i);if(d){d.classList.add("error");d.classList.remove("filled");}}
     const disp=document.getElementById("loginPinDisplay");
@@ -2109,6 +2110,30 @@ function saveLS(){
   try{fbOrders.set(orders);}catch(e){}
 }
 /* ── RESPALDO ── */
+function checkAutoRespaldo(){
+  const KEY='rpos_lastAutoRespaldo';
+  const ultimo=localStorage.getItem(KEY);
+  const ahora=new Date();
+  const debePasarFecha=new Date(ahora.getFullYear(),ahora.getMonth()-1,ahora.getDate());
+  if(ultimo&&new Date(ultimo)>debePasarFecha)return; // menos de un mes, no hace nada
+  // Ya pasó un mes — hacer respaldo automático
+  const data={
+    version:3,fecha:ahora.toISOString(),negocio:'Soda El Tucan',
+    ventas,gastos,cierres,menu,cats,users,mesas,orders,
+    cajaBilletes,cajainicialBilletes,ticketConfig,
+    nextVid,nextMid,nextUid
+  };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  const mes=ahora.toISOString().slice(0,7);
+  a.download='soda-el-tucan-auto-'+mes+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  localStorage.setItem(KEY,ahora.toISOString());
+  toast('📦 Respaldo automático del mes guardado en Descargas');
+}
 function exportarRespaldo(){
   const data={
     version:3,fecha:new Date().toISOString(),negocio:'Soda El Tucan',
