@@ -422,6 +422,8 @@ const ALL_SCREENS=["salon","ventas","gastos","cierre","menu-admin","usuarios"];
 const TABLET_MODE=new URLSearchParams(window.location.search).get('tablet')==='1';
 const FB_CONFIG={apiKey:"AIzaSyAW4J1KkZMdKfiJVka7s3PjymoyyykfINI",authDomain:"pos-tucan.firebaseapp.com",databaseURL:"https://pos-tucan-default-rtdb.firebaseio.com",projectId:"pos-tucan",storageBucket:"pos-tucan.firebasestorage.app",messagingSenderId:"271965578160",appId:"1:271965578160:web:5577bfe487ed2bf208ac75"};
 let fbOrders={set:()=>{},on:()=>{}};// fallback stub
+let fbVentas={set:()=>{},on:()=>{}};
+let _fbVentasReady=false;
 try{
   firebase.initializeApp(FB_CONFIG);
   fbOrders=firebase.database().ref('pos_orders');
@@ -430,6 +432,22 @@ try{
     Object.keys(d).forEach(m=>{if(d[m]&&Array.isArray(d[m].items))orders[m]=d[m];});
     renderSalon();
     if(activeMesa&&document.getElementById('mesaModal'))renderMesaModal();
+  });
+  fbVentas=firebase.database().ref('pos_ventas');
+  fbVentas.on('value',snap=>{
+    const d=snap.val()||{};
+    const remotas=Object.values(d);
+    if(remotas.length){
+      const localIds=new Set(ventas.map(v=>v.id));
+      remotas.forEach(v=>{if(!localIds.has(v.id))ventas.push(v);});
+      ventas.sort((a,b)=>a.id-b.id);
+      const maxId=Math.max(...ventas.map(v=>v.id||0));
+      if(maxId>=nextVid)nextVid=maxId+1;
+      try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
+    }
+    _fbVentasReady=true;
+    const s=document.getElementById('screen-ventas');
+    if(s&&s.classList.contains('on'))renderVentas();
   });
 }catch(e){console.warn('Firebase no disponible, modo offline:',e.message);}
 const SCREEN_LABELS={salon:"Salon",ventas:"Ventas",gastos:"Gastos",cierre:"Cierre","menu-admin":"Menu",usuarios:"Usuarios"};
@@ -2108,6 +2126,10 @@ function saveLS(){
 
   }catch(e){}
   try{fbOrders.set(orders);}catch(e){}
+  try{
+    const vo={};ventas.forEach(v=>{vo[v.id]=v;});
+    fbVentas.set(vo);
+  }catch(e){}
 }
 /* ── RESPALDO ── */
 function checkAutoRespaldo(){
