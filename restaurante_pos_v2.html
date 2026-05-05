@@ -1682,8 +1682,11 @@ function renderCierre(){
       calHtml+detHtml;
   }
 }
+let _cierreEnProceso=false;
 function hacerCierre(){
+  if(_cierreEnProceso)return;
   if(!confirm("Confirmar cierre del periodo?"))return;
+  _cierreEnProceso=true;setTimeout(function(){_cierreEnProceso=false;},3000);
   const d=new Date();
   const pad=n=>String(n).padStart(2,"0");
   const fecha=pad(d.getDate())+"/"+(pad(d.getMonth()+1))+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes());
@@ -1713,8 +1716,9 @@ function hacerCierre(){
   cierres.push(cierreData);
   printCierreReport(cierreData);
   // Marcar fin del periodo — NO borrar ventas ni gastos
-  lastCierreVentaId=nextVid-1;
-  lastCierreGastoId=nextGid-1;
+  // Usamos nextVid/nextGid como marcador: el proximo item creado tendra id >= ese valor
+  lastCierreVentaId=nextVid-1;   // ventas con id <= este quedan en el cierre pasado
+  lastCierreGastoId=nextGid-1;   // gastos con id <= este quedan en el cierre pasado
   cajaBilletes={};
   calCierresSelDia=d.toISOString().slice(0,10);
   calCierresMes=calCierresSelDia.slice(0,7);
@@ -1723,8 +1727,8 @@ function hacerCierre(){
   setTimeout(()=>showCajaInicialModal(),600);
 }
 function totalCajainicial(){return cajainicial;}
-function curPeriodVentas(){return lastCierreVentaId>0?ventas.filter(v=>(v.id||0)>lastCierreVentaId):ventas;}
-function curPeriodGastos(){return lastCierreGastoId>0?gastos.filter(g=>(g.id||0)>lastCierreGastoId):gastos;}
+function curPeriodVentas(){return ventas.filter(v=>(v.id||0)>lastCierreVentaId);}
+function curPeriodGastos(){return gastos.filter(g=>(g.id||0)>lastCierreGastoId);}
 function showCajaInicialModal(){
   const old=document.getElementById("cajaInicialModal");if(old)old.remove();
   const div=document.createElement("div");div.id="cajaInicialModal";
@@ -1751,8 +1755,9 @@ function guardarCajaInicial(){
   cajainicial=inp?Math.round(parseFloat(inp.value)||0):0;
   saveLS();
   document.getElementById("cajaInicialModal").remove();
-  toast("&#128176; Caja inicial: "+fmt(cajainicial));
-  renderCierre();
+  // Volver al PIN para empezar el nuevo periodo limpio
+  toast("&#128176; Caja inicial: "+fmt(cajainicial)+" — Nuevo periodo iniciado");
+  setTimeout(function(){doLogout();},1200);
 }
 function printCierreReport(c){
   const w=window.open('','_blank','width=500,height=800');
@@ -2222,6 +2227,10 @@ function loadLS(){
     const ngi=localStorage.getItem('rpos_nextGid');if(ngi)nextGid=parseInt(ngi);
     const lcv=localStorage.getItem('rpos_lastCierreVentaId');if(lcv)lastCierreVentaId=parseInt(lcv)||0;
     const lcg=localStorage.getItem('rpos_lastCierreGastoId');if(lcg)lastCierreGastoId=parseInt(lcg)||0;
+    // Migrar gastos sin ID (version anterior no los tenia)
+    let migratedGastos=false;
+    gastos.forEach(function(g){if(!g.id){g.id=nextGid++;migratedGastos=true;}});
+    if(migratedGastos){try{localStorage.setItem('rpos_gastos',JSON.stringify(gastos));localStorage.setItem('rpos_nextGid',nextGid);}catch(e){}}
     const tc=localStorage.getItem('rpos_ticketConfig');if(tc)ticketConfig={...ticketConfig,...JSON.parse(tc)};
     const ms=localStorage.getItem('rpos_mesas');if(ms){const _m=JSON.parse(ms);
       // accept if non-empty and not old format (old format had "Para llevar" without number or "Mesa1" without space)
