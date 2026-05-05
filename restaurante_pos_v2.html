@@ -1696,6 +1696,8 @@ function hacerCierre(){
   cierres.push(cierreData);
   printCierreReport(cierreData);
   ventas=[];gastos=[];cajaBilletes={};cajainicialBilletes={};
+  calCierresSelDia=d.toISOString().slice(0,10);
+  calCierresMes=calCierresSelDia.slice(0,7);
   saveLS();
   renderCierre();
   setTimeout(()=>showCajaInicialModal(),600);
