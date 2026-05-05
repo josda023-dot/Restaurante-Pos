@@ -648,7 +648,10 @@ let users=[
 ];
 let activeCat=cats[0],activeMesa=null,payMethod=null,gastoTipo="caja",menuBusqueda="";
 let efBilletes={},cajaBilletes={};
-let cajainicialBilletes={};  // denomination counts for initial cash
+let cajainicial=0;       // monto simple que se deja en caja para el siguiente dia
+let nextGid=1;           // ID incremental para gastos
+let lastCierreVentaId=0; // ventas con id > este valor son del periodo actual
+let lastCierreGastoId=0; // gastos con id > este valor son del periodo actual
 let activeUser=null,pendingLoginId=null,loginPinStr="",pinCobroCb=null,pinCobroStr="",pinCobroUserId=null;
 let splitGroups=[],splitAssignment={},nextGroupId=1;
 let splitEfQueue=[],splitEfBilletes={},splitEfCobradoPor=null;
@@ -1473,7 +1476,7 @@ function addGasto(){
   const desc=document.getElementById("gDesc").value.trim();const monto=parseInt(document.getElementById("gMonto").value);
   if(!desc||!monto){toast("Completa descripcion y monto");return;}
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  gastos.push({hora:hm,fecha:now.toISOString().slice(0,10),desc,monto,tipo:gastoTipo});
+  gastos.push({id:nextGid++,hora:hm,fecha:now.toISOString().slice(0,10),desc,monto,tipo:gastoTipo});
   document.getElementById("gDesc").value="";document.getElementById("gMonto").value="";
   saveLS();renderGastos();toast("Gasto registrado");
 }
@@ -1484,12 +1487,10 @@ function calGastosClickDia(iso){calGastosSelDia=calGastosSelDia===iso?null:iso;c
 function renderGastos(){
   const NM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const NMlargo=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  // Build combined gastos from today + cierres history
-  const today=new Date().toISOString().slice(0,10);
-  const histGastos=cierres.reduce(function(arr,c){return arr.concat((c.gastosList||[]).map(function(g){return Object.assign({},g,{fechaCierre:c.fechaISO});
-  }));;},[]);
-  const todayGastos=gastos.map(function(g){return Object.assign({},g,{fechaCierre:today});});
-  const allGastos=histGastos.concat(todayGastos);
+  // Build combined gastos: historical (from cierres) + current period
+  const histGastos=cierres.reduce(function(arr,c){return arr.concat((c.gastosList||[]).map(function(g){return Object.assign({},g,{_hist:true});}));;},[]);
+  const pendingGastos=curPeriodGastos();
+  const allGastos=histGastos.concat(pendingGastos);
   const datesG=new Set(allGastos.map(function(g){return g.fecha||g.fechaCierre;}).filter(Boolean));
   // Calendar
   const[cy,cm]=calGastosMes.split('-').map(Number);
@@ -1530,16 +1531,16 @@ function renderGastos(){
 
 /* ── CIERRE ── */
 function renderCierre(){
-  const ef=ventas.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
-  const tc=ventas.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
-  const si=ventas.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
-  const dv=ventas.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
-  const gastoCaja=gastos.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
-  const gastoFuerte=gastos.filter(g=>g.tipo==="fuerte").reduce((a,g)=>a+g.monto,0);
-  const gastoSinpe=gastos.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
-  const gastoTransf=gastos.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
+  const pv=curPeriodVentas();const pg=curPeriodGastos();
+  const ef=pv.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
+  const tc=pv.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
+  const si=pv.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
+  const dv=pv.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
+  const gastoCaja=pg.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
+  const gastoFuerte=pg.filter(g=>g.tipo==="fuerte").reduce((a,g)=>a+g.monto,0);
+  const gastoSinpe=pg.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
+  const gastoTransf=pg.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
   const totalVentas=ef+tc+si+dv;
-  const cajainicial=totalCajainicial();
   // Efectivo neto ganado en caja (ventas ef menos lo que se pagó con caja)
   const efNeto=ef-gastoCaja;
   // Efectivo total en caja al cierre
@@ -1556,13 +1557,13 @@ function renderCierre(){
       '<span>'+fmt(v)+'</span>'+
     '</div>';
   };
-  const gastosCajaList=gastos.filter(function(g){return g.tipo==="caja";});
-  const gastosExternosList=gastos.filter(function(g){return g.tipo!=="caja";});
+  const gastosCajaList=pg.filter(function(g){return g.tipo==="caja";});
+  const gastosExternosList=pg.filter(function(g){return g.tipo!=="caja";});
   box.innerHTML=
     // VENTAS
     '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:10px">'+
-      '<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">VENTAS DEL DÍA</div>'+
-      '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#888"><span>Órdenes atendidas</span><span>'+ventas.length+'</span></div>'+
+      '<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">VENTAS DEL PERIODO</div>'+
+      '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#888"><span>Órdenes atendidas</span><span>'+pv.length+'</span></div>'+
       (ef?row('Efectivo',ef):'')+(tc?row('Tarjeta',tc):'')+(si?row('SINPE',si):'')+(dv?row('Dividido',dv):'')+
       row('TOTAL VENTAS',totalVentas,{bold:true})+
     '</div>'+
@@ -1576,10 +1577,10 @@ function renderCierre(){
       '<div style="font-size:11px;color:#888;margin-top:6px;padding-top:6px;border-top:1px dashed #eee">Efectivo de más sobre la caja inicial: <b style="color:#1D9E75">'+fmt(efNeto)+'</b></div>'+
     '</div>'+
     // GASTOS (si hay)
-    (gastos.length?
+    (pg.length?
       '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:10px">'+
-        '<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">GASTOS DEL DÍA</div>'+
-        gastos.map(function(g){
+        '<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:.5px;margin-bottom:8px">GASTOS DEL PERIODO</div>'+
+        pg.map(function(g){
           const t=GASTO_TIPOS[g.tipo]||GASTO_TIPOS.caja;
           return'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0">'+
             '<span style="color:#555">'+g.desc+' <span style="font-size:10px;background:#f0f0f0;border-radius:4px;padding:1px 5px">'+t.lbl+'</span></span>'+
@@ -1666,95 +1667,75 @@ function renderCierre(){
   }
 }
 function hacerCierre(){
-  if(!confirm("Confirmar cierre del dia?"))return;
+  if(!confirm("Confirmar cierre del periodo?"))return;
   const d=new Date();
   const pad=n=>String(n).padStart(2,"0");
   const fecha=pad(d.getDate())+"/"+(pad(d.getMonth()+1))+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes());
-  const ef=ventas.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
-  const tc=ventas.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
-  const si=ventas.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
-  const dv=ventas.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
-  const gastoCaja=gastos.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
-  const gastoFuerte=gastos.filter(g=>g.tipo==="fuerte").reduce((a,g)=>a+g.monto,0);
-  const gastoSinpe=gastos.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
-  const gastoTransf=gastos.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
+  const pv=curPeriodVentas();const pg=curPeriodGastos();
+  const ef=pv.filter(v=>v.metodo==="Efectivo").reduce((a,v)=>a+v.total,0);
+  const tc=pv.filter(v=>v.metodo==="Tarjeta").reduce((a,v)=>a+v.total,0);
+  const si=pv.filter(v=>v.metodo==="SINPE").reduce((a,v)=>a+v.total,0);
+  const dv=pv.filter(v=>v.metodo==="Dividido").reduce((a,v)=>a+v.total,0);
+  const gastoCaja=pg.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
+  const gastoFuerte=pg.filter(g=>g.tipo==="fuerte").reduce((a,g)=>a+g.monto,0);
+  const gastoSinpe=pg.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
+  const gastoTransf=pg.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
   const totalVentas=ef+tc+si+dv;
-  const cajainicial=totalCajainicial();
-  const efNeto=ef-gastoCaja;              // efectivo ganado (ventas ef menos gastos de caja)
-  const efEnCaja=cajainicial+efNeto;      // efectivo total que debería estar en caja
-  const utilidad=efNeto+tc+si+dv;        // utilidad = ef de más + tarjeta + sinpe + dividido
+  const efNeto=ef-gastoCaja;
+  const efEnCaja=cajainicial+efNeto;
+  const utilidad=efNeto+tc+si+dv;
   const cierreData={
     fecha,fechaISO:d.toISOString().slice(0,10),
-    numVentas:ventas.length,
+    numVentas:pv.length,
     ef,tc,si,dv,totalVentas,
     gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
     efNeto,efEnCaja,cajainicial,
     utilidad,
-    gastosList:[...gastos],
+    gastosList:[...pg],
     billetesCaja:{...cajaBilletes}
   };
   cierres.push(cierreData);
   printCierreReport(cierreData);
-  ventas=[];gastos=[];cajaBilletes={};cajainicialBilletes={};
+  // Marcar fin del periodo — NO borrar ventas ni gastos
+  lastCierreVentaId=nextVid-1;
+  lastCierreGastoId=nextGid-1;
+  cajaBilletes={};
   calCierresSelDia=d.toISOString().slice(0,10);
   calCierresMes=calCierresSelDia.slice(0,7);
   saveLS();
   renderCierre();
   setTimeout(()=>showCajaInicialModal(),600);
 }
-function totalCajainicial(){return Object.entries(cajainicialBilletes).reduce((a,[v,c])=>a+parseInt(v)*c,0);}
-function setCajainicialDenom(val,monto){
-  const cnt=Math.round((parseInt(monto)||0)/val);
-  if(cnt<=0)delete cajainicialBilletes[val];else cajainicialBilletes[val]=cnt;
-  const lbl=document.getElementById("ci_lbl_"+val);
-  const tipo=val>=1000?"billete":"moneda";
-  if(lbl)lbl.textContent=cnt>0?("= "+cnt+" "+tipo+(cnt!==1?"s":"")):"= 0";
-  const tot=document.getElementById("ciModalTotal");
-  if(tot)tot.textContent=fmt(totalCajainicial());
-}
+function totalCajainicial(){return cajainicial;}
+function curPeriodVentas(){return lastCierreVentaId>0?ventas.filter(v=>(v.id||0)>lastCierreVentaId):ventas;}
+function curPeriodGastos(){return lastCierreGastoId>0?gastos.filter(g=>(g.id||0)>lastCierreGastoId):gastos;}
 function showCajaInicialModal(){
   const old=document.getElementById("cajaInicialModal");if(old)old.remove();
-  cajainicialBilletes={};
-  const billetes=DENOMINACIONES_CAJA.filter(d=>d.val>=1000);
-  const monedas=DENOMINACIONES_CAJA.filter(d=>d.val<1000);
-  const mkRow=d=>{const esB=d.val>=1000;
-    const storedCnt=cajainicialBilletes[d.val]||0;
-    const storedMonto=storedCnt?storedCnt*d.val:"";
-    return`<div style="display:grid;grid-template-columns:85px 1fr auto;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0">
-      <div style="background:${esB?"#FAEEDA":"#E6F1FB"};border-radius:6px;padding:5px 8px;text-align:center">
-        <div style="font-size:13px;font-weight:700;color:${esB?"#633806":"#0C447C"}">${fmt(d.val)}</div>
-        <div style="font-size:10px;color:${esB?"#854F0B":"#185FA5"}">${d.lbl}</div>
-      </div>
-      <input type="number" min="0" placeholder="Monto" value="${storedMonto}" id="ci_${d.val}"
-        style="border:1px solid #ddd;border-radius:8px;padding:8px;font-size:14px;text-align:right;width:100%"
-        oninput="setCajainicialDenom(${d.val},this.value)">
-      <span style="font-size:11px;color:#1D9E75;font-weight:600;min-width:90px;text-align:left" id="ci_lbl_${d.val}">${storedCnt>0?"= "+storedCnt+" "+(d.val>=1000?"billete":"moneda")+(storedCnt!==1?"s":""):"= 0"}</span>
-    </div>`;};
   const div=document.createElement("div");div.id="cajaInicialModal";
   div.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px";
-  div.innerHTML=`<div style="background:#fff;border-radius:14px;padding:24px;max-width:400px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.3)">
-    <div style="font-size:17px;font-weight:700;color:#111;margin-bottom:4px">&#128176; Caja inicial para ma&#241;ana</div>
-    <div style="font-size:12px;color:#888;margin-bottom:16px">Ingresa el monto que tenes de cada billete o moneda</div>
-    <div style="font-size:10px;font-weight:700;color:#999;margin-bottom:4px;letter-spacing:.5px">BILLETES</div>
-    ${billetes.map(mkRow).join("")}
-    <div style="font-size:10px;font-weight:700;color:#999;margin-top:12px;margin-bottom:4px;letter-spacing:.5px">MONEDAS</div>
-    ${monedas.map(mkRow).join("")}
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:14px;border-top:2px solid #1D9E75">
-      <div style="font-size:15px;font-weight:700;color:#085041">Total: <span id="ciModalTotal">&#8353; 0</span></div>
-      <div style="display:flex;gap:8px">
-        <button onclick="document.getElementById('cajaInicialModal').remove()"
-          style="padding:10px 14px;border-radius:8px;border:1px solid #ddd;background:#f5f5f0;font-size:13px;cursor:pointer">Omitir</button>
-        <button onclick="guardarCajaInicial()"
-          style="padding:10px 20px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:14px;font-weight:600;cursor:pointer">&#10003; Guardar</button>
-      </div>
+  div.innerHTML=`<div style="background:#fff;border-radius:14px;padding:28px;max-width:360px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+    <div style="font-size:18px;font-weight:700;color:#111;margin-bottom:6px">&#128176; Caja para ma&#241;ana</div>
+    <div style="font-size:13px;color:#666;margin-bottom:20px">&#191;Cu&#225;nto efectivo dej&#225;s en caja para vueltos?</div>
+    <input type="number" id="cajaInicialInput" min="0" placeholder="Ej: 99000"
+      value="${cajainicial||''}"
+      style="width:100%;border:2px solid #1D9E75;border-radius:10px;padding:14px;font-size:20px;text-align:center;font-weight:700;color:#085041;outline:none;box-sizing:border-box;margin-bottom:6px">
+    <div style="font-size:11px;color:#999;text-align:center;margin-bottom:20px">Este monto queda como caja inicial del siguiente periodo</div>
+    <div style="display:flex;gap:10px">
+      <button onclick="document.getElementById('cajaInicialModal').remove()"
+        style="flex:1;padding:12px;border-radius:8px;border:1px solid #ddd;background:#f5f5f0;font-size:14px;cursor:pointer">Omitir</button>
+      <button onclick="guardarCajaInicial()"
+        style="flex:2;padding:12px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">&#10003; Guardar</button>
     </div>
   </div>`;
   document.body.appendChild(div);
+  setTimeout(()=>{const inp=document.getElementById('cajaInicialInput');if(inp)inp.focus();},100);
 }
 function guardarCajaInicial(){
+  const inp=document.getElementById('cajaInicialInput');
+  cajainicial=inp?Math.round(parseFloat(inp.value)||0):0;
   saveLS();
   document.getElementById("cajaInicialModal").remove();
-  toast("&#128176; Caja inicial: "+fmt(totalCajainicial()));
+  toast("&#128176; Caja inicial: "+fmt(cajainicial));
   renderCierre();
 }
 function printCierreReport(c){
@@ -2118,11 +2099,14 @@ function saveLS(){
     localStorage.setItem('rpos_gastos',JSON.stringify(gastos));
     localStorage.setItem('rpos_cierres',JSON.stringify(cierres));
     localStorage.setItem('rpos_cajaBilletes',JSON.stringify(cajaBilletes));
-    localStorage.setItem('rpos_cajainicial',JSON.stringify(cajainicialBilletes));
+    localStorage.setItem('rpos_cajainicial',cajainicial);
     localStorage.setItem('rpos_orders',JSON.stringify(orders));
     localStorage.setItem('rpos_nextMid',nextMid);
     localStorage.setItem('rpos_nextVid',nextVid);
     localStorage.setItem('rpos_nextUid',nextUid);
+    localStorage.setItem('rpos_nextGid',nextGid);
+    localStorage.setItem('rpos_lastCierreVentaId',lastCierreVentaId);
+    localStorage.setItem('rpos_lastCierreGastoId',lastCierreGastoId);
     localStorage.setItem('rpos_ticketConfig',JSON.stringify(ticketConfig));
     localStorage.setItem('rpos_mesas',JSON.stringify(mesas));
 
@@ -2214,11 +2198,14 @@ function loadLS(){
     const g=localStorage.getItem('rpos_gastos');if(g)gastos=JSON.parse(g);
     const ci=localStorage.getItem('rpos_cierres');if(ci)cierres=JSON.parse(ci);
     const cb=localStorage.getItem('rpos_cajaBilletes');if(cb)cajaBilletes=JSON.parse(cb);
-    const ci2=localStorage.getItem('rpos_cajainicial');if(ci2)try{cajainicialBilletes=JSON.parse(ci2)||{};}catch(e){}
+    const ci2=localStorage.getItem('rpos_cajainicial');if(ci2){const v=parseFloat(ci2);if(!isNaN(v))cajainicial=v;}
     const ord=localStorage.getItem('rpos_orders');if(ord)orders=JSON.parse(ord);
     const nmi=localStorage.getItem('rpos_nextMid');if(nmi)nextMid=parseInt(nmi);
     const nvi=localStorage.getItem('rpos_nextVid');if(nvi)nextVid=parseInt(nvi);
     const nui=localStorage.getItem('rpos_nextUid');if(nui)nextUid=parseInt(nui);
+    const ngi=localStorage.getItem('rpos_nextGid');if(ngi)nextGid=parseInt(ngi);
+    const lcv=localStorage.getItem('rpos_lastCierreVentaId');if(lcv)lastCierreVentaId=parseInt(lcv)||0;
+    const lcg=localStorage.getItem('rpos_lastCierreGastoId');if(lcg)lastCierreGastoId=parseInt(lcg)||0;
     const tc=localStorage.getItem('rpos_ticketConfig');if(tc)ticketConfig={...ticketConfig,...JSON.parse(tc)};
     const ms=localStorage.getItem('rpos_mesas');if(ms){const _m=JSON.parse(ms);
       // accept if non-empty and not old format (old format had "Para llevar" without number or "Mesa1" without space)
