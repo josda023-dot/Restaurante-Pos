@@ -59,13 +59,14 @@ body{background:#f5f5f0;min-height:100vh}
 .mesa-info{font-size:11px;color:#666}
 .mesa-icon{font-size:22px;margin-bottom:6px}
 .overlay-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:16px;z-index:100;overflow-y:auto}
-.modal{background:#fff;border-radius:12px;border:1px solid #ddd;width:100%;max-width:1040px;display:grid;grid-template-columns:1fr 310px;min-height:600px;max-height:calc(100vh - 32px);overflow:hidden}
+.modal{background:#fff;border-radius:12px;border:1px solid #ddd;width:100%;max-width:1080px;display:grid;grid-template-columns:1fr 350px;min-height:600px;max-height:calc(100vh - 32px);overflow:hidden}
 .modal-menu{overflow-y:auto;padding:16px;border-right:1px solid #eee;max-height:calc(100vh - 32px)}
-.modal-order{display:flex;flex-direction:column;padding:14px;max-height:calc(100vh - 32px);overflow-y:auto}
+.modal-order{display:flex;flex-direction:column;padding:14px;max-height:calc(100vh - 32px);overflow:hidden}
 .modal-title{font-size:15px;font-weight:600;margin-bottom:12px;color:#111}
-.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.ctab{padding:5px 12px;border-radius:8px;border:1px solid #ddd;background:transparent;font-size:12px;cursor:pointer;color:#666}
-.ctab.active{background:#f0f0f0;color:#111;font-weight:600;border-color:#999}
+.cat-tabs{display:block;margin-bottom:12px}
+.ctab{padding:8px 16px;border-radius:20px;border:none;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;transition:opacity .1s}
+.ctab:hover{opacity:.85}
+.ctab.active{outline:2.5px solid #1D9E75;outline-offset:2px}
 .menu-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
 .mi{background:#f8f8f6;border-radius:10px;padding:14px 10px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;transition:border-color .1s;user-select:none}
 .mi:hover{border-color:#999;background:#efefec}
@@ -497,6 +498,7 @@ const DENOMINACIONES_CAJA=[
 const GASTO_TIPOS={caja:{lbl:"Efectivo caja",cls:"bg-ef",btnCls:"caja"},fuerte:{lbl:"Caja fuerte",cls:"bg-cf",btnCls:"fuerte"},sinpe:{lbl:"SINPE",cls:"bg-si",btnCls:"sinpe"},transf:{lbl:"Transferencia",cls:"bg-tr",btnCls:"transf"}};
 
 let cats=["Almuerzos","Especiales","Sopas","Gallos","Pastas","Bebidas","Desayunos","Antojitos","+Proteínas","+Acomp.","+Salsas","+Snacks","+Bebidas Ad.","+Varios"];
+const catColors={"Almuerzos":{bg:"#E6F1FB",cl:"#0C447C"},"Especiales":{bg:"#EAF3DE",cl:"#27500A"},"Sopas":{bg:"#FAEEDA",cl:"#633806"},"Gallos":{bg:"#FAECE7",cl:"#4A1B0C"},"Pastas":{bg:"#EEEDFE",cl:"#26215C"},"Bebidas":{bg:"#FBEAF0",cl:"#4B1528"},"Desayunos":{bg:"#E1F5EE",cl:"#04342C"},"Antojitos":{bg:"#FCEBEB",cl:"#501313"},"+Proteínas":{bg:"#F1EFE8",cl:"#2C2C2A"},"+Acomp.":{bg:"#E1F5EE",cl:"#085041"},"+Salsas":{bg:"#FAEEDA",cl:"#854F0B"},"+Snacks":{bg:"#FCEBEB",cl:"#A32D2D"},"+Bebidas Ad.":{bg:"#EEEDFE",cl:"#3C3489"},"+Varios":{bg:"#F1EFE8",cl:"#444441"}};
 let menu=[
   /* ALMUERZOS */
   {id:1,name:"Casado con Proteína",price:4500,cat:"Almuerzos",emoji:"\uD83C\uDF7D"},
@@ -689,12 +691,12 @@ let cobraItbis=true,cobraServicio=false;
 let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false};
 let ventasFiltro=null;
 let ventasMesFiltro=null;
-let ventasDiaFiltro=new Date().toISOString().slice(0,10); // arranca mostrando hoy
+let ventasDiaFiltro=localISO(); // arranca mostrando hoy
 let calVentasMes=new Date().toISOString().slice(0,7);
 let calCierresMes=new Date().toISOString().slice(0,7);
 let calCierresSelDia=null;
 let calGastosMes=new Date().toISOString().slice(0,7);
-let calGastosSelDia=new Date().toISOString().slice(0,10); // arranca mostrando hoy
+let calGastosSelDia=localISO(); // arranca mostrando hoy
 let _ventasDisplayPool=[];
 let _lastCierreReportHTML=''; // para reimprimir el último reporte de cierre
 // caja inicial: se usa localStorage con fecha del día para no repetir en recargas
@@ -703,6 +705,8 @@ let cambiarPinState={uid:null,phase:'current',str:'',newPin:''};
 
 const fmt=n=>"\u20A1"+Math.round(n).toLocaleString("es-CR");
 function initials(n){return n.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase();}
+// Fecha local (YYYY-MM-DD) \u2014 evita el desfase UTC que afecta ventas hechas despu\u00E9s de las 6pm
+function localISO(d){const D=d||new Date();return D.getFullYear()+'-'+String(D.getMonth()+1).padStart(2,'0')+'-'+String(D.getDate()).padStart(2,'0');}
 
 /* ── LOGIN ── */
 function showLoginUsers(){
@@ -754,7 +758,7 @@ function verifyLogin(){
     if(u.role==="admin")setTimeout(checkAutoRespaldo,1500);
     // Preguntar caja inicial al arrancar el sistema (solo la primera vez por sesión)
     // Preguntar caja inicial solo la primera vez del día (sobrevive recargas de página)
-    const _hoy=new Date().toISOString().slice(0,10);
+    const _hoy=localISO();
     if(localStorage.getItem('rpos_cajaPedida')!==_hoy){
       localStorage.setItem('rpos_cajaPedida',_hoy);
       setTimeout(showCajaInicialModal,500);
@@ -860,6 +864,15 @@ function getTotal(){
 }
 
 function renderMesaModal(){
+  // Guardar posiciones de scroll antes de reconstruir el DOM
+  const _pOL=document.querySelector('.order-items-list');
+  const _olST=_pOL?_pOL.scrollTop:-1;const _olSH=_pOL?_pOL.scrollHeight:0;const _olCH=_pOL?_pOL.clientHeight:0;
+  const _pMM=document.querySelector('.modal-menu');const _mmST=_pMM?_pMM.scrollTop:0;
+  const _restoreScroll=function(){setTimeout(function(){
+    const ol=document.querySelector('.order-items-list');
+    if(ol){const atBot=_olST<0||(_olSH-_olST-_olCH<100);ol.scrollTop=atBot?ol.scrollHeight:_olST;}
+    const mm=document.querySelector('.modal-menu');if(mm&&_mmST>0)mm.scrollTop=_mmST;
+  },0);};
   const old=document.getElementById("mesaModal");if(old)old.remove();
   const availCats=[...new Set(menu.map(i=>i.cat))].filter(c=>cats.includes(c));
   if(!availCats.includes(activeCat))activeCat=availCats[0]||cats[0];
@@ -879,9 +892,16 @@ function renderMesaModal(){
     div.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:stretch;justify-content:center;padding:0;z-index:100;overflow:hidden";
     const tabItemsFiltrados=menuBusqueda.trim()?menu.filter(i=>i.name.toLowerCase().includes(menuBusqueda.toLowerCase())):menu.filter(i=>i.cat===activeCat);
     const tabItems=tabItemsFiltrados.map(i=>`<div onclick="addToOrder(${i.id})" style="background:#f8f8f6;border-radius:12px;padding:14px 8px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;user-select:none"><div style="font-size:26px;margin-bottom:6px">${i.emoji}</div><div style="font-size:12px;font-weight:600;color:#111;line-height:1.3;margin-bottom:4px">${i.name}</div><div style="font-size:13px;color:#1D9E75;font-weight:700">${fmt(i.price)}</div></div>`).join('')||`<div style="color:#999;padding:20px;text-align:center">${menuBusqueda?'Sin resultados':'Sin platillos'}</div>`;
-    const tabCats=availCats.map(c=>`<button onclick="setMesaCat('${c.replace(/'/g,"\'")}');" style="padding:9px 16px;border-radius:10px;border:1.5px solid ${c===activeCat?'#1D9E75':'#e0e0e0'};background:${c===activeCat?'#E1F5EE':'#fff'};font-size:13px;font-weight:${c===activeCat?700:400};color:${c===activeCat?'#085041':'#666'};cursor:pointer;white-space:nowrap">${c}</button>`).join('');
+    const tabMainAvail=availCats.filter(function(c){return!c.startsWith('+');});
+    const tabAddAvail=availCats.filter(function(c){return c.startsWith('+');});
+    const tabAdicionalesActivo=activeCat.startsWith('+');
+    let tabCatsMain=tabMainAvail.map(function(c){const clr=catColors[c]||{bg:'#f0f0f0',cl:'#444'};return'<button onclick="setMesaCat(\''+c.replace(/'/g,"\\'")+'\');" style="padding:9px 18px;border-radius:20px;border:none;background:'+clr.bg+';color:'+clr.cl+';font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap'+(c===activeCat?';outline:2.5px solid #1D9E75;outline-offset:2px':'')+'">' +c+'</button>';}).join('');
+    if(tabAddAvail.length)tabCatsMain+='<button onclick="setMesaAdicionales();" style="padding:9px 18px;border-radius:20px;border:none;background:#FAEEDA;color:#633806;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap'+(tabAdicionalesActivo?';outline:2.5px solid #1D9E75;outline-offset:2px':'')+'">'+(tabAdicionalesActivo?'&#9660;':'&#9658;')+' Adicionales</button>';
+    let tabCatsAdd='';
+    if(tabAdicionalesActivo&&tabAddAvail.length){tabCatsAdd='<div style="display:flex;gap:7px;flex-wrap:wrap;padding-top:8px;margin-top:6px;border-top:2px dashed #e8d8c0">'+tabAddAvail.map(function(c){const clr=catColors[c]||{bg:'#f0f0f0',cl:'#444'};return'<button onclick="setMesaCat(\''+c.replace(/'/g,"\\'")+'\');" style="padding:9px 18px;border-radius:20px;border:none;background:'+clr.bg+';color:'+clr.cl+';font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap'+(c===activeCat?';outline:2.5px solid #1D9E75;outline-offset:2px':'')+'">' +c.replace(/^\+/,'')+'</button>';}).join('')+'</div>';}
+    const tabCats='<div style="display:flex;gap:7px;flex-wrap:wrap">'+tabCatsMain+'</div>'+tabCatsAdd;
     div.innerHTML=`<div style="background:#fff;width:100%;max-width:960px;display:grid;grid-template-columns:1fr 270px;overflow:hidden">
-      <div style="overflow-y:auto;padding:16px;border-right:1px solid #eee;display:flex;flex-direction:column;gap:12px">
+      <div class="modal-menu" style="overflow-y:auto;padding:16px;border-right:1px solid #eee;display:flex;flex-direction:column;gap:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
           <div style="font-size:18px;font-weight:700;color:#111">&#127860; ${activeMesa}</div>
           <button onclick="closeMesa()" style="padding:8px 18px;border-radius:8px;border:1px solid #ddd;background:transparent;font-size:14px;cursor:pointer;color:#666">&times; Cerrar</button>
@@ -890,23 +910,30 @@ function renderMesaModal(){
           <input type="text" id="menuBusqInput" value="${menuBusqueda.replace(/"/g,'&quot;')}" placeholder="🔍 Buscar platillo..." oninput="setMenuBusqueda(this.value)" style="width:100%;padding:8px 32px 8px 12px;border:1.5px solid ${menuBusqueda?'#1D9E75':'#ddd'};border-radius:10px;font-size:14px;outline:none;box-sizing:border-box">
           ${menuBusqueda?`<button onclick="setMenuBusqueda('')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;font-size:18px;line-height:1">&times;</button>`:''}
         </div>
-        <div id="menuCatTabs" style="display:flex;gap:7px;flex-wrap:wrap;flex-shrink:0;${menuBusqueda?'display:none':''}">${tabCats}</div>
+        <div id="menuCatTabs" style="flex-shrink:0;${menuBusqueda?'display:none':''}">${tabCats}</div>
         <div id="menuItemsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:9px">${tabItems}</div>
       </div>
       <div style="display:flex;flex-direction:column;padding:16px;background:#fafaf8">
         <div style="font-size:15px;font-weight:700;color:#111;margin-bottom:10px;flex-shrink:0">Orden</div>
-        <div style="flex:1;overflow-y:auto;margin-bottom:10px;min-height:0">${orderRows}</div>
+        <div class="order-items-list" style="flex:1;overflow-y:auto;margin-bottom:10px;min-height:0">${orderRows}</div>
         <hr style="border:none;border-top:1px solid #eee;margin:0 0 10px;flex-shrink:0">
         <div style="font-size:12px;color:#888;margin-bottom:14px;flex-shrink:0">${ord.items.reduce((a,i)=>a+i.qty,0)} platillo(s)</div>
         <button onclick="enviarACocina()" ${hasItems?'':'disabled'} style="width:100%;padding:15px;border-radius:12px;border:none;background:${hasItems?'#1D9E75':'#ccc'};color:#fff;font-size:15px;font-weight:700;cursor:${hasItems?'pointer':'default'};margin-bottom:8px;flex-shrink:0">&#128424; Enviar a Cocina</button>
         <button onclick="closeMesa()" style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:13px;cursor:pointer;color:#666;flex-shrink:0">Cancelar</button>
       </div>
     </div>`;
-    document.body.appendChild(div);return;
+    document.body.appendChild(div);_restoreScroll();return;
   }
 
   /* ── MODO COMPU ── */
-  const catTabs=availCats.map(c=>`<button class="ctab${c===activeCat?" active":""}" onclick="setMesaCat('${c.replace(/'/g,"\'")}');">${c}</button>`).join("");
+  const mainAvailCats=availCats.filter(function(c){return!c.startsWith('+');});
+  const addAvailCats=availCats.filter(function(c){return c.startsWith('+');});
+  const adicionalesActivo=activeCat.startsWith('+');
+  let catTabsMain=mainAvailCats.map(function(c){const clr=catColors[c]||{bg:'#f0f0f0',cl:'#444'};return'<button class="ctab'+(c===activeCat?' active':'')+'" style="background:'+clr.bg+';color:'+clr.cl+'" onclick="setMesaCat(\''+c.replace(/'/g,"\\'")+'\')">' +c+'</button>';}).join('');
+  if(addAvailCats.length)catTabsMain+='<button class="ctab'+(adicionalesActivo?' active':'')+'" style="background:#FAEEDA;color:#633806" onclick="setMesaAdicionales()">'+(adicionalesActivo?'&#9660;':'&#9658;')+' Adicionales</button>';
+  let catTabsAdd='';
+  if(adicionalesActivo&&addAvailCats.length){catTabsAdd='<div style="display:flex;gap:7px;flex-wrap:wrap;padding-top:8px;margin-top:6px;border-top:2px dashed #e8d8c0">'+addAvailCats.map(function(c){const clr=catColors[c]||{bg:'#f0f0f0',cl:'#444'};return'<button class="ctab'+(c===activeCat?' active':'')+'" style="background:'+clr.bg+';color:'+clr.cl+'" onclick="setMesaCat(\''+c.replace(/'/g,"\\'")+'\')">' +c.replace(/^\+/,'')+'</button>';}).join('')+'</div>';}
+  const catTabs='<div style="display:flex;gap:7px;flex-wrap:wrap">'+catTabsMain+'</div>'+catTabsAdd;
   const itemsFiltrados=menuBusqueda.trim()?menu.filter(i=>i.name.toLowerCase().includes(menuBusqueda.toLowerCase())):menu.filter(i=>i.cat===activeCat);
   const items=itemsFiltrados.map(i=>`<div class="mi" onclick="addToOrder(${i.id})"><div class="mi-em">${i.emoji}</div><div class="mi-nm">${i.name}</div><div class="mi-pr">${fmt(i.price)}</div></div>`).join("")||`<div class="empty">${menuBusqueda?'Sin resultados para "'+menuBusqueda+'"':'Sin platillos'}</div>`;
   div.innerHTML=`<div class="modal">
@@ -958,9 +985,15 @@ function renderMesaModal(){
       <button class="btn-sec" onclick="closeMesa()">Cancelar</button>
     </div>
   </div>`;
-  document.body.appendChild(div);
+  document.body.appendChild(div);_restoreScroll();
 }
 function setMesaCat(c){activeCat=c;menuBusqueda='';renderMesaModal();}
+function setMesaAdicionales(){
+  const availC=[...new Set(menu.map(i=>i.cat))].filter(c=>cats.includes(c));
+  if(activeCat.startsWith('+')){activeCat=availC.filter(c=>!c.startsWith('+'))[0]||cats[0];}
+  else{activeCat=availC.filter(c=>c.startsWith('+'))[0]||cats[0];}
+  menuBusqueda='';renderMesaModal();
+}
 function setMenuBusqueda(val){
   menuBusqueda=val;
   const grid=document.getElementById('menuItemsGrid');
@@ -1086,7 +1119,7 @@ function confirmarPago(cobradoPor){
   const vuelto=Math.max(0,recibido-total);
   const vueltoDesg=payMethod==="Efectivo"&&vuelto>0?calcVueltoDesglose(vuelto):[];
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  ventas.push({id:nextVid++,hora:hm,fecha:now.toISOString().slice(0,10),mesa:activeMesa,items:[...ord.items],metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
+  ventas.push({id:nextVid++,hora:hm,fecha:localISO(now),mesa:activeMesa,items:[...ord.items],metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
   if(payMethod==="Efectivo"){for(const[v,c]of Object.entries(efBilletes))cajaBilletes[v]=(cajaBilletes[v]||0)+c;for(const vd of vueltoDesg)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
   const ventaGuardada=ventas[ventas.length-1];
   orders[activeMesa]={items:[]};saveLS();closeEfModal();closeMesa();
@@ -1258,7 +1291,7 @@ function sv2Finalizar(cobradoPor){
   });
   // Registrar venta normal
   ventas.push({
-    id:nextVid++,hora:hm,fecha:now.toISOString().slice(0,10),
+    id:nextVid++,hora:hm,fecha:localISO(now),
     mesa:activeMesa,items:itemsCobro,
     metodo:sv2Method,cobradoPor:cobradoPor||'—',
     sub,descMonto:0,servMonto,tax,total,
@@ -1600,7 +1633,7 @@ function finalizarPagoSplit(cobradoPor){
       if(p.vuelto>0){const vd=calcVueltoDesglose(p.vuelto);for(const vv of vd)cajaBilletes[vv.val]=Math.max(0,(cajaBilletes[vv.val]||0)-vv.cnt);}
     }
   }
-  ventas.push({id:nextVid++,hora:hm,fecha:now.toISOString().slice(0,10),mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
+  ventas.push({id:nextVid++,hora:hm,fecha:localISO(now),mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
   orders[activeMesa]={items:[]};
   splitGroups=[];splitAssignment={};splitEfBilletes={};splitEfQueue=[];
   const ventaGuardada=ventas[ventas.length-1];
@@ -1720,7 +1753,7 @@ function buildCalHTML(year,month,datesV,datesC,selDate,prevFn,nextFn,dayFn,leyen
   const DIAS=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
   const firstDay=new Date(year,month-1,1).getDay();
   const daysInMonth=new Date(year,month,0).getDate();
-  const today=new Date().toISOString().slice(0,10);
+  const today=localISO();
   let cells='';
   for(let i=0;i<firstDay;i++)cells+='<div class="cal-cell"></div>';
   for(let d=1;d<=daysInMonth;d++){
@@ -1827,7 +1860,7 @@ function renderVentas(){
     const leyenda='<span><div style="width:10px;height:10px;border-radius:50%;background:#1D9E75;display:inline-block"></div> Días con ventas</span>';
     const calHtml=buildCalHTML(cy,cm,datesV,new Set(),ventasDiaFiltro||null,'calVentasPrev','calVentasNext','calVentasClickDia',leyenda);
     const bs=function(a){return'padding:5px 10px;border-radius:8px;border:1px solid '+(a?'#1D9E75':'#ddd')+';background:'+(a?'#E1F5EE':'transparent')+';color:'+(a?'#085041':'#666')+';font-size:12px;cursor:pointer;font-weight:'+(a?600:400);};
-    const hoy=new Date().toISOString().slice(0,10);
+    const hoy=localISO();
     const hoyBtn='<button class="cal-todo-btn" onclick="setVentasDiaFiltro(\''+hoy+'\')" style="background:#E1F5EE;border-color:#5DCAA5;color:#085041;margin-right:6px">📅 Hoy</button>';
     const todoBtn=(ventasDiaFiltro?'<button class="cal-todo-btn" onclick="calVentasClickDia(\''+ventasDiaFiltro+'\')">Ver todo '+NMlargo[cm-1]+'</button>':'')+hoyBtn;
     const empleados=[...new Set(pool.map(function(v){return v.cobradoPor;}).filter(function(e){return e&&e!=="&mdash;";}))];
@@ -1959,7 +1992,7 @@ function addGasto(){
     }
   }
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  gastos.push({hora:hm,fecha:now.toISOString().slice(0,10),desc,monto,tipo:gastoTipo});
+  gastos.push({hora:hm,fecha:localISO(now),desc,monto,tipo:gastoTipo});
   document.getElementById("gDesc").value="";document.getElementById("gMonto").value="";
   saveLS();renderGastos();toast("Gasto registrado");
 }
@@ -2265,7 +2298,7 @@ function hacerCierre(){
   const efEnCaja=cajainicial+efNeto;
   const utilidad=efNeto+tc+si;
   const cierreData={
-    fecha,fechaISO:d.toISOString().slice(0,10),
+    fecha,fechaISO:localISO(d),
     numVentas:ventas.length,
     ef,tc,si,totalVentas,
     gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
@@ -2280,7 +2313,7 @@ function hacerCierre(){
   // Limpiar el periodo — cada cierre empieza desde cero
   ventas=[];gastos=[];cajaBilletes={};
   try{fbVentas.set({});}catch(e){} // limpiar ventas en Firebase tambien
-  calCierresSelDia=d.toISOString().slice(0,10);
+  calCierresSelDia=localISO(d);
   calCierresMes=calCierresSelDia.slice(0,7);
   saveLS();
   renderCierre();
@@ -2315,7 +2348,7 @@ function calcMetodos(ventasList){
 function showCajaInicialModal(afterCierre){
   const old=document.getElementById("cajaInicialModal");if(old)old.remove();
   // Marcar que ya se mostró la caja para este período (evita re-preguntar en recargas)
-  localStorage.setItem('rpos_cajaPedida',new Date().toISOString().slice(0,10));
+  localStorage.setItem('rpos_cajaPedida',localISO());
   const div=document.createElement("div");div.id="cajaInicialModal";
   div.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px";
   const titulo=afterCierre?"&#128176; Caja para el nuevo periodo":"&#128176; Caja inicial del dia";
@@ -2716,7 +2749,7 @@ function renderTicketPreview(){
 /* ── LOCAL STORAGE ── */
 function saveLS(){
   // 6-month auto-purge
-  const _cutoff=new Date();_cutoff.setMonth(_cutoff.getMonth()-6);const _co=_cutoff.toISOString().slice(0,10);
+  const _cutoff=new Date();_cutoff.setMonth(_cutoff.getMonth()-6);const _co=localISO(_cutoff);
   ventas=ventas.filter(v=>!v.fecha||v.fecha>=_co);
   gastos=gastos.filter(g=>!g.fecha||g.fecha>=_co);
   cierres=cierres.filter(c=>!c.fechaISO||c.fechaISO>=_co);
@@ -2779,7 +2812,7 @@ function exportarRespaldo(){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;
-  a.download='soda-el-tucan-'+new Date().toISOString().slice(0,10)+'.json';
+  a.download='soda-el-tucan-'+localISO()+'.json';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('✓ Respaldo descargado');
