@@ -1029,43 +1029,38 @@ function selPay(m){payMethod=m;efBilletes={};renderMesaModal();}
 
 /* ── PIN COBRO ── */
 function showPinCobro(cb){
-  if(activeUser){cb(activeUser.name);return;}
+  // Siempre pregunta quién cobra — independiente del usuario logueado
   pinCobroCb=cb;pinCobroStr="";pinCobroUserId=null;
   const old=document.getElementById("pinCobroModal");if(old)old.remove();
   const div=document.createElement("div");div.className="overlay-bg";div.id="pinCobroModal";div.style.zIndex="300";
-  div.innerHTML=`<div class="pin-cobro-modal">
-    <div style="font-size:28px;margin-bottom:8px">&#128179;</div>
-    <div style="font-size:15px;font-weight:600;color:#111;margin-bottom:4px">Confirmar cobro</div>
-    <div style="font-size:12px;color:#666;margin-bottom:14px">Ingresa tu PIN para registrar el cobro</div>
-    <div class="pin-display" id="cobroPinDisplay">
-      <div class="pin-dot" id="cpd0"></div><div class="pin-dot" id="cpd1"></div>
-      <div class="pin-dot" id="cpd2"></div><div class="pin-dot" id="cpd3"></div>
-    </div>
-    <div style="font-size:12px;color:#E24B4A;text-align:center;min-height:16px;margin-bottom:10px" id="cobroErr"></div>
-    <div class="numpad" style="margin-bottom:14px">
-      ${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="nk" onclick="addPinCobroDigit(${n})">${n}</button>`).join("")}
-      <button class="nk" style="grid-column:2" onclick="addPinCobroDigit(0)">0</button>
-      <button class="nk del" style="grid-column:3" onclick="delPinCobroDigit()">&larr;</button>
-    </div>
-    <button class="btn-sec" onclick="closePinCobro()">Cancelar</button>
-  </div>`;
+  const userBtns=users.map(function(u){
+    const av=u.role==='admin'
+      ?'background:#E1F5EE;color:#085041'
+      :'background:#E6F1FB;color:#0C447C';
+    const activo=activeUser&&activeUser.id===u.id;
+    return'<button onclick="selCobradorUser('+u.id+')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;border:1.5px solid '+(activo?'#1D9E75':'#e0e0e0')+';background:'+(activo?'#f0faf6':'#fafaf8')+';cursor:pointer;text-align:left;width:100%">'
+      +'<div style="width:38px;height:38px;border-radius:50%;'+av+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0">'+initials(u.name)+'</div>'
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:600;color:#111">'+u.name+'</div>'
+      +(activo?'<div style="font-size:11px;color:#1D9E75">Usuario activo</div>':'')
+      +'</div>'
+      +(activo?'<span style="font-size:18px">&#10003;</span>':'')
+      +'</button>';
+  }).join('');
+  div.innerHTML='<div class="pin-cobro-modal" style="max-width:320px">'
+    +'<div style="font-size:24px;margin-bottom:8px">&#128179;</div>'
+    +'<div style="font-size:15px;font-weight:600;color:#111;margin-bottom:4px">&#191;Qui&#233;n cobra?</div>'
+    +'<div style="font-size:12px;color:#666;margin-bottom:16px">Selecciona el cajero que realiza el cobro</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">'+userBtns+'</div>'
+    +'<button class="btn-sec" onclick="closePinCobro()">Cancelar</button>'
+    +'</div>';
   document.body.appendChild(div);
 }
+function selCobradorUser(id){const u=users.find(function(u){return u.id===id;});if(u){closePinCobro();if(pinCobroCb)pinCobroCb(u.name);}}
 function closePinCobro(){const m=document.getElementById("pinCobroModal");if(m)m.remove();pinCobroUserId=null;pinCobroStr="";}
-function addPinCobroDigit(d){if(pinCobroStr.length>=4)return;pinCobroStr+=d;updateCobroDots();if(pinCobroStr.length===4)setTimeout(verifyPinCobro,120);}
-function delPinCobroDigit(){pinCobroStr=pinCobroStr.slice(0,-1);updateCobroDots();}
-function updateCobroDots(){for(let i=0;i<4;i++){const d=document.getElementById("cpd"+i);if(d){d.classList.toggle("filled",i<pinCobroStr.length);d.classList.remove("error");}}}
-function verifyPinCobro(){
-  const u=users.find(u=>u.pin===pinCobroStr);
-  if(u){closePinCobro();if(pinCobroCb)pinCobroCb(u.name);}
-  else{
-    for(let i=0;i<4;i++){const d=document.getElementById("cpd"+i);if(d){d.classList.add("error");d.classList.remove("filled");}}
-    const disp=document.getElementById("cobroPinDisplay");
-    if(disp){disp.classList.add("shake");setTimeout(()=>disp.classList.remove("shake"),400);}
-    const err=document.getElementById("cobroErr");if(err)err.textContent="PIN incorrecto";
-    setTimeout(()=>{pinCobroStr="";updateCobroDots();const e=document.getElementById("cobroErr");if(e)e.textContent="";},700);
-  }
-}
+function addPinCobroDigit(d){if(pinCobroStr.length>=4)return;pinCobroStr+=d;if(pinCobroStr.length===4)setTimeout(verifyPinCobro,120);}
+function delPinCobroDigit(){pinCobroStr=pinCobroStr.slice(0,-1);}
+function updateCobroDots(){}
+function verifyPinCobro(){}
 
 /* ── COBRO NORMAL ── */
 function iniciarCobro(){showPinCobro(cp=>{if(payMethod==="Efectivo")showEfectivoModal(cp);else confirmarPago(cp);});}
