@@ -2743,14 +2743,14 @@ function buildTicketHTML(v){
   let h='';
   // Header
   if(tc.nombre)h+=ctr(`<strong style="font-size:17px">${tc.nombre}</strong>`);
-  if(tc.slogan)h+=ctr(tc.slogan,'font-size:11px;color:#555');
+  if(tc.slogan)h+=ctr(tc.slogan,'font-size:11px');
   if(tc.direccion)h+=ctr(tc.direccion,'font-size:11px');
   if(tc.telefono)h+=ctr('Tel: '+tc.telefono,'font-size:11px');
   h+=hr('solid');
   // Info
   h+=row(`<strong>Tiquete #${String(v.id).padStart(4,'0')}</strong>`,`${fecha} ${v.hora}`);
   h+=`<div>Mesa: <strong>${v.mesa}</strong></div>`;
-  if(tc.mostrarEmpleado&&v.cobradoPor&&v.cobradoPor!=='&mdash;')h+=`<div style="font-size:11px;color:#555">Atendido por: ${v.cobradoPor}</div>`;
+  if(tc.mostrarEmpleado&&v.cobradoPor&&v.cobradoPor!=='&mdash;')h+=`<div style="font-size:11px">Atendido por: ${v.cobradoPor}</div>`;
   h+=hr('dash');
   // Items
   v.items.forEach(i=>{
@@ -2760,7 +2760,7 @@ function buildTicketHTML(v){
   h+=hr('dash');
   // Totals
   h+=row('Subtotal:',fmt(v.sub));
-  if(v.descMonto>0)h+=`<div class="ticket-row" style="color:#c0392b"><span>Descuento:</span><span>&minus; ${fmt(v.descMonto)}</span></div>`;
+  if(v.descMonto>0)h+=`<div class="ticket-row"><span>Descuento:</span><span>&minus; ${fmt(v.descMonto)}</span></div>`;
   h+=row('Servicio 10%:',v.servMonto>0?fmt(v.servMonto):fmt(0));
   h+=row('ITBIS 13%:',v.tax>0?fmt(v.tax):fmt(0));
   h+=hr('solid');
@@ -2769,8 +2769,8 @@ function buildTicketHTML(v){
   // Payment
   if(v.pagos){
     const ic={Efectivo:'&#128181;',Tarjeta:'&#128179;',SINPE:'&#128241;'};
-    h+=`<div style="font-size:11px;color:#555;margin-bottom:3px">Cuenta dividida:</div>`;
-    v.pagos.forEach(p=>h+=row(`${ic[p.method]||''} ${p.name}:`,fmt(p.amount)));
+    h+=`<div style="font-size:11px;margin-bottom:3px">Cuenta dividida:</div>`;
+    v.pagos.forEach(p=>h+=row(`${p.name}:`,fmt(p.amount)));
   } else {
     h+=row('Metodo:',v.metodo);
     if(v.metodo==='Efectivo'){
@@ -2779,13 +2779,13 @@ function buildTicketHTML(v){
       } else {
         h+=row('Recibido:',fmt(v.recibido));
       }
-      h+=`<div class="ticket-vuelto"><span>Vuelto:</span><span style="color:#085041">${v.vuelto>0?fmt(v.vuelto):'Exacto &#10003;'}</span></div>`;
+      h+=`<div class="ticket-vuelto"><span>Vuelto:</span><span>${v.vuelto>0?fmt(v.vuelto):'Exacto &#10003;'}</span></div>`;
     }
   }
   // Footer
-  if(tc.pieMsg){h+=hr('dash');h+=ctr(tc.pieMsg,'font-size:11px;color:#666;font-style:italic');}
+  if(tc.pieMsg){h+=hr('dash');h+=ctr(tc.pieMsg,'font-size:11px;font-style:italic');}
   h+=hr('solid');
-  h+=ctr('* * *','font-size:10px;color:#ccc;margin-top:2px');
+  h+=ctr('- - -','font-size:10px;margin-top:2px');
   return h;
 }
 function showTicket(v){
