@@ -1002,6 +1002,7 @@ function renderMesaModal(){
         <button class="pb${payMethod==="SINPE"?" sel":""}" onclick="selPay('SINPE')">&#128241; SINPE</button>
       </div>
       <button class="btn-cobrar" id="btn-cobrar-main" onclick="iniciarCobro()" ${can?"":"disabled"}>Cobrar ${fmt(total)}</button>
+      <button class="btn-sec" style="margin-bottom:6px;${hasItems?"border-color:#1D9E75;color:#085041;background:#E1F5EE":""}" onclick="${hasItems?"imprimirPreCuenta()":""}" ${hasItems?"":"disabled"}>&#128220; Ver cuenta</button>
       <button class="btn-sec" style="margin-bottom:6px;${hasItems?"border-color:#8B5CF6;color:#5B21B6;background:#F3E8FF":""}" onclick="${hasItems?"showSplitV2Modal()":""}" ${hasItems?"":"disabled"}>&#9986; Dividir cuenta</button>
       <button class="btn-sec" style="margin-bottom:6px;${hasItems?"":"opacity:0.5;cursor:not-allowed"}" onclick="${hasItems?"mostrarTransferirMesa()":""}" ${hasItems?"":"disabled"}>⇄ Transferir</button>
       <button class="btn-sec" onclick="closeMesa()">Cancelar</button>
@@ -1086,6 +1087,53 @@ function verifyPinCobro(){}
 
 /* ── COBRO NORMAL ── */
 function iniciarCobro(){showPinCobro(cp=>{if(payMethod==="Efectivo")showEfectivoModal(cp);else confirmarPago(cp);});}
+
+function imprimirPreCuenta(){
+  const ord=orders[activeMesa];if(!ord||!ord.items||!ord.items.length)return;
+  const{sub,descMonto,servMonto,tax,total}=getTotal();
+  const tc=ticketConfig;
+  const d=new Date();
+  const fecha=d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const hm=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+  const row=(l,r)=>`<div class="ticket-row"><span>${l}</span><span>${r}</span></div>`;
+  const ctr=(txt,style='')=>`<div class="ticket-center" ${style?'style="'+style+'"':''}>${txt}</div>`;
+  const hr=(s)=>`<hr class="ticket-hr-${s}">`;
+  let h='';
+  if(tc.nombre)h+=ctr(`<strong style="font-size:18px">${tc.nombre}</strong>`);
+  if(tc.slogan)h+=ctr(tc.slogan,'font-size:13px');
+  if(tc.direccion)h+=ctr(tc.direccion,'font-size:13px');
+  if(tc.telefono)h+=ctr('Tel: '+tc.telefono,'font-size:13px');
+  h+=hr('solid');
+  h+=ctr('<strong style="font-size:15px">CUENTA PREVIA</strong>');
+  h+=row(`Mesa: <strong>${activeMesa}</strong>`,`${fecha} ${hm}`);
+  h+=hr('dash');
+  ord.items.forEach(i=>{const nm=i.qty>1?`${i.qty} &times; ${i.name}`:i.name;h+=row(nm,fmt(i.price*i.qty));});
+  h+=hr('dash');
+  h+=row('Subtotal:',fmt(sub));
+  if(descMonto>0)h+=row('Descuento:','&minus; '+fmt(descMonto));
+  h+=row('Servicio 10%:',fmt(servMonto));
+  h+=row('ITBIS 13%:',fmt(tax));
+  h+=hr('solid');
+  h+=`<div class="ticket-bold"><span>TOTAL:</span><span>${fmt(total)}</span></div>`;
+  h+=hr('solid');
+  h+=ctr('* Pendiente de pago *','font-size:12px;font-style:italic');
+  if(tc.pieMsg){h+=hr('dash');h+=ctr(tc.pieMsg,'font-size:13px;font-style:italic');}
+  const w=window.open('','_blank','width=420,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Cuenta — ${activeMesa}</title>
+  <style>
+    @page{size:80mm auto;margin:3mm}
+    *{box-sizing:border-box;margin:0;padding:0;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{font-family:'Courier New',Courier,monospace;font-size:14px;padding:6px 8px;width:74mm;line-height:1.8;color:#000;font-weight:600}
+    .ticket-center{text-align:center}
+    .ticket-row{display:flex;justify-content:space-between;gap:6px;font-weight:600}
+    .ticket-row span:last-child{white-space:nowrap}
+    .ticket-bold{display:flex;justify-content:space-between;font-weight:800;font-size:16px;gap:6px}
+    .ticket-hr-solid{border:none;border-top:2.5px solid #000;margin:5px 0}
+    .ticket-hr-dash{border:none;border-top:1.5px dashed #000;margin:5px 0}
+  </style></head><body>${h}</body></html>`);
+  w.document.close();w.focus();
+  setTimeout(()=>{w.print();},400);
+}
 function totalBilletes(){return Object.entries(efBilletes).reduce((a,[v,c])=>a+parseInt(v)*c,0);}
 
 const BILLETES_USD=[1,2,5,10,20,50,100];
