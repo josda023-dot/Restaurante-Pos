@@ -244,7 +244,7 @@ body{background:#f5f5f0;min-height:100vh}
   <button class="navbtn" onclick="goScreen('usuarios')" id="nav-usuarios">Usuarios</button>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
     <span id="activeUserLabel" style="font-size:12px;color:#666;font-weight:500"></span>
-    <button onclick="toggleModoPrueba()" title="Activar/desactivar modo de pruebas" style="padding:5px 10px;border-radius:8px;border:1px solid #F59E0B;background:transparent;font-size:11px;cursor:pointer;color:#92400E;font-weight:600">🧪 Prueba</button>
+    <button id="nav-prueba" onclick="toggleModoPrueba()" title="Activar/desactivar modo de pruebas" style="padding:5px 10px;border-radius:8px;border:1px solid #F59E0B;background:transparent;font-size:11px;cursor:pointer;color:#92400E;font-weight:600">🧪 Prueba</button>
     <button class="navbtn" onclick="doLogout()" style="color:#E24B4A;border-color:#EDBBBA">&#9211; Salir</button>
   </div>
 </div>
@@ -366,6 +366,21 @@ body{background:#f5f5f0;min-height:100vh}
         <button class="btn-green" onclick="saveTicketConfig()">&#10003; Guardar cambios</button>
       </div>
       <div class="card">
+        <div class="section-title">&#128276; Notificaciones al celular</div>
+        <p style="font-size:12px;color:#666;line-height:1.6;margin-bottom:14px">Recib&#237; un resumen autom&#225;tico en tu celular cada vez que se haga un cierre. Usa la app <strong>ntfy</strong> (gratis, sin cuenta).</p>
+        <div style="background:#f0faf6;border:1px solid #5DCAA5;border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:#085041;line-height:1.7">
+          <div style="font-weight:700;margin-bottom:4px">&#128242; C&#243;mo configurarlo en tu celular:</div>
+          <div>1&#65039;&#8419; Descarg&#225; la app <strong>ntfy</strong> (Android o iPhone)</div>
+          <div>2&#65039;&#8419; Abrila y suscribite a un tema &#250;nico, por ejemplo: <strong>soda-tucan-daniel</strong></div>
+          <div>3&#65039;&#8419; Escrib&#237; ese mismo nombre aqu&#237; abajo y guard&#225;</div>
+          <div>4&#65039;&#8419; Cada cierre te llegar&#225; una notificaci&#243;n con el resumen</div>
+        </div>
+        <div class="form-row"><div style="flex:1"><label>Tema ntfy (tu nombre &#250;nico)</label><input class="fi" id="tc-ntfy" placeholder="ej: soda-tucan-daniel"></div></div>
+        <div style="font-size:11px;color:#999;margin-bottom:14px">Usa solo letras, n&#250;meros y guiones. No uses un tema obvio como "soda" para que sea solo tuyo.</div>
+        <button class="btn-sec" onclick="probarNotifCierre()" style="margin-bottom:8px">&#128172; Enviar notificaci&#243;n de prueba</button>
+        <button class="btn-green" onclick="saveTicketConfig()">&#10003; Guardar cambios</button>
+      </div>
+      <div class="card">
         <div class="section-title">Vista previa</div>
         <div id="ticketPreviewPanel" style="background:#f8f8f6;border:1px dashed #ccc;border-radius:8px;padding:14px"></div>
       </div>
@@ -436,6 +451,7 @@ const FB_CONFIG={apiKey:"AIzaSyAW4J1KkZMdKfiJVka7s3PjymoyyykfINI",authDomain:"po
 /* ── MODO PRUEBA — usa rutas Firebase separadas para no contaminar datos reales ── */
 const modoPrueba=localStorage.getItem('rpos_modoPrueba')==='1';
 function toggleModoPrueba(){
+  if(!activeUser||activeUser.role!=='admin'){toast('Solo disponible para administradores');return;}
   if(!confirm(modoPrueba
     ?'Salir del Modo Prueba y volver a produccion?\n\nLos datos de prueba quedan guardados aqui pero no se sincronizaran con la otra compu.'
     :'Activar Modo Prueba?\n\nEn este modo las ordenes y ventas usan rutas separadas en Firebase y NO llegaran a la otra computadora.\n\nUtil para hacer pruebas sin afectar los datos reales.'))return;
@@ -688,7 +704,10 @@ let splitEfQueue=[],splitEfBilletes={},splitEfCobradoPor=null;
 let mesasOpenedAt={};
 let descuento={tipo:'pct',valor:0};
 let cobraItbis=true,cobraServicio=false;
-let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false};
+let tipoCambio=parseInt(localStorage.getItem('rpos_tipoCambio'))||530; // colones por dólar
+let efModoUSD=false; // efectivo modal en modo dólares
+let efDolaresAmt=''; // monto ingresado en dólares
+let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false,ntfyTopic:''};
 let ventasFiltro=null;
 let ventasMesFiltro=null;
 let ventasDiaFiltro=localISO(); // arranca mostrando hoy
@@ -772,7 +791,10 @@ function verifyLogin(){
   }
 }
 function doLogout(){activeUser=null;loginPinStr="";pendingLoginId=null;document.getElementById("activeUserLabel").textContent="";document.getElementById("loginOverlay").style.display="flex";showLoginUsers();}
-function updateNav(){ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(!b)return;b.style.display=(!activeUser)?"none":(activeUser.role==="admin"||activeUser.allowedScreens.includes(s))?"":"none";});}
+function updateNav(){
+  ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(!b)return;b.style.display=(!activeUser)?"none":(activeUser.role==="admin"||activeUser.allowedScreens.includes(s))?"":"none";});
+  const bp=document.getElementById("nav-prueba");if(bp)bp.style.display=(activeUser&&activeUser.role==="admin")?"":"none";
+}
 
 /* ── NAVEGACION ── */
 function goScreen(s){
@@ -1066,56 +1088,107 @@ function verifyPinCobro(){}
 function iniciarCobro(){showPinCobro(cp=>{if(payMethod==="Efectivo")showEfectivoModal(cp);else confirmarPago(cp);});}
 function totalBilletes(){return Object.entries(efBilletes).reduce((a,[v,c])=>a+parseInt(v)*c,0);}
 
+const BILLETES_USD=[1,2,5,10,20,50,100];
+function totalEfRecibido(){return efModoUSD?Math.round((parseFloat(efDolaresAmt)||0)*tipoCambio):totalBilletes();}
+function setEfModoUSD(usd,cp){efModoUSD=usd;if(usd){efBilletes={};}else{efDolaresAmt='';}showEfectivoModal(cp);}
+function addDolarBill(v,cp){efDolaresAmt=String(Math.round(((parseFloat(efDolaresAmt)||0)+v)*100)/100);showEfectivoModal(cp);}
+function setDolarAmt(val,cp){efDolaresAmt=val;const d=document.getElementById("efModal");if(!d)return;const{total}=getTotal();const en=Math.round((parseFloat(val)||0)*tipoCambio);const v=en-total;const rv=document.getElementById("ef-rec-val");const vv=document.getElementById("ef-vue-val");const vl=document.getElementById("ef-vue-lbl");const cb=document.getElementById("ef-confirm-btn");if(rv)rv.textContent=en>0?fmt(en):'—';if(vv){if(en>0&&v===0){vv.textContent='Exacto';vv.className='totbox-val verde';}else if(v>0){vv.textContent=fmt(v);vv.className='totbox-val verde';}else if(v<0&&en>0){vv.textContent='Falta '+fmt(Math.abs(v));vv.className='totbox-val rojo';}else{vv.textContent='—';vv.className='totbox-val azul';}}if(vl)vl.textContent=v<0?'Falta':'Vuelto';if(cb){const ok=en>=total&&en>0;cb.disabled=!ok;cb.style.background=ok?'':'#bbb';cb.textContent=ok?'✓ Confirmar cobro':'Monto insuficiente';}}
+function setTipoCambioModal(val,cp){const v=parseInt(val)||530;tipoCambio=v;localStorage.setItem('rpos_tipoCambio',v);showEfectivoModal(cp);}
 function showEfectivoModal(cp){
   const old=document.getElementById("efModal");if(old)old.remove();
-  const{total}=getTotal();const recibido=totalBilletes();const vuelto=recibido-total;
-  const billetesHtml=DENOMINACIONES.map(d=>{const cnt=efBilletes[d.val]||0;const esB=d.val>=1000;
-    return`<div class="billete-btn" onclick="addBillete(${d.val},'${cp}')" style="background:${esB?"#FAEEDA":"#E6F1FB"};border-color:${esB?"#EF9F27":"#85B7EB"}">
-      ${cnt>0?`<div class="billete-count">${cnt}</div>`:""}
-      <div class="billete-val" style="color:${esB?"#633806":"#0C447C"}">${fmt(d.val)}</div>
-      <div class="billete-tipo" style="color:${esB?"#854F0B":"#185FA5"}">${d.lbl}</div>
-    </div>`;}).join("");
-  const desgloseRows=DENOMINACIONES.filter(d=>efBilletes[d.val]>0).map(d=>`<div class="desglose-row"><span style="flex:1;color:#666">${fmt(d.val)}</span><span style="font-weight:600;color:#111;min-width:30px;text-align:center">${efBilletes[d.val]}&times;</span><span style="color:#666;min-width:65px;text-align:right">${fmt(d.val*efBilletes[d.val])}</span><button class="desglose-x" onclick="remBillete(${d.val},'${cp}')">&times;</button></div>`).join("");
-  let vueltoTxt="&mdash;",vueltoClass="azul";
-  if(recibido>0&&vuelto===0)vueltoTxt="Exacto";
-  else if(vuelto>0){vueltoTxt=fmt(vuelto);vueltoClass="verde";}
-  else if(vuelto<0){vueltoTxt="Falta "+fmt(Math.abs(vuelto));vueltoClass="rojo";}
-  const canConfirm=recibido>=total&&recibido>0;
+  const{total}=getTotal();
+  const toggleHtml='<div style="display:flex;gap:4px;background:#f0f0ec;border-radius:10px;padding:4px;margin-bottom:14px">'
+    +'<button onclick="setEfModoUSD(false,\''+cp+'\')" style="flex:1;padding:7px;border-radius:7px;border:none;background:'+(!efModoUSD?'#fff':'transparent')+';font-size:13px;font-weight:600;cursor:pointer;color:'+(!efModoUSD?'#1D9E75':'#888')+';box-shadow:'+(!efModoUSD?'0 1px 4px rgba(0,0,0,.1)':'none')+'">&#8353; Colones</button>'
+    +'<button onclick="setEfModoUSD(true,\''+cp+'\')" style="flex:1;padding:7px;border-radius:7px;border:none;background:'+(efModoUSD?'#fff':'transparent')+';font-size:13px;font-weight:600;cursor:pointer;color:'+(efModoUSD?'#1D9E75':'#888')+';box-shadow:'+(efModoUSD?'0 1px 4px rgba(0,0,0,.1)':'none')+'">$ D&#243;lares</button>'
+    +'</div>';
   const div=document.createElement("div");div.className="overlay-bg";div.id="efModal";div.style.zIndex="200";
-  div.innerHTML=`<div class="ef-modal">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:15px;font-weight:600;color:#111">Efectivo &mdash; ${activeMesa}</div>
-      <button class="btn-sec" style="width:auto;padding:6px 14px" onclick="closeEfModal()">&larr; Atras</button>
-    </div>
-    <div class="totbar">
-      <div class="totbox"><div class="totbox-lbl">A cobrar</div><div class="totbox-val azul">${fmt(total)}</div></div>
-      <div class="totbox"><div class="totbox-lbl">Recibido</div><div class="totbox-val verde">${recibido?fmt(recibido):"&mdash;"}</div></div>
-      <div class="totbox"><div class="totbox-lbl">${vuelto<0?"Falta":"Vuelto"}</div><div class="totbox-val ${vueltoClass}">${vueltoTxt}</div></div>
-    </div>
-    <div style="font-size:11px;font-weight:600;color:#999;margin-bottom:8px">Toca para sumar &mdash; cada toque agrega una unidad</div>
-    <div class="billete-grid">${billetesHtml}</div>
-    ${desgloseRows?`<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:4px">Desglose recibido</div><div class="desglose">${desgloseRows}</div>`:""}
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn-sec" style="width:auto;padding:8px 16px" onclick="limpiarBilletes('${cp}')">Limpiar</button>
-      <button class="btn-cobrar" style="margin:0;${!canConfirm?"background:#bbb;cursor:default":""}" ${canConfirm?"":'disabled'} onclick="confirmarPago('${cp}')">${canConfirm?"&check; Confirmar cobro":"Monto insuficiente"}</button>
-    </div>
-  </div>`;
+  let bodyHtml;
+  if(efModoUSD){
+    const dolarMonto=parseFloat(efDolaresAmt)||0;
+    const enColones=Math.round(dolarMonto*tipoCambio);
+    const vuelto=enColones-total;
+    let vueltoTxt='&mdash;',vueltoClass='azul',vueltolbl='Vuelto';
+    if(dolarMonto>0&&vuelto===0){vueltoTxt='Exacto';vueltoClass='verde';}
+    else if(vuelto>0){vueltoTxt=fmt(vuelto);vueltoClass='verde';}
+    else if(vuelto<0&&dolarMonto>0){vueltoTxt='Falta '+fmt(Math.abs(vuelto));vueltoClass='rojo';vueltolbl='Falta';}
+    const canConfirm=dolarMonto>0&&enColones>=total;
+    const esAdmin=activeUser&&activeUser.role==='admin';
+    const tcField=esAdmin
+      ?'<input type="number" value="'+tipoCambio+'" min="1" oninput="setTipoCambioModal(this.value,\''+cp+'\')" style="width:80px;padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:14px;font-weight:700;color:#111;outline:none">'
+      :'<span style="font-size:14px;font-weight:700;color:#111">'+tipoCambio+'</span>';
+    bodyHtml='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;background:#f8f8f6;padding:8px 10px;border-radius:8px">'
+      +'<span style="font-size:12px;color:#666;font-weight:600">Tipo de cambio:</span>'
+      +'<span style="font-size:12px;color:#666">&#8353;</span>'
+      +tcField
+      +'<span style="font-size:12px;color:#666">por $1</span>'
+      +(esAdmin?'':'<span style="font-size:10px;color:#aaa;margin-left:4px">(solo admin)</span>')
+      +'</div>'
+      +'<div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px">Monto recibido en dólares</div>'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'
+      +'<span style="font-size:28px;color:#3B6D11;font-weight:700">$</span>'
+      +'<input type="number" id="efDolarInput" value="'+efDolaresAmt+'" min="0" step="0.01" placeholder="0.00" oninput="setDolarAmt(this.value,\''+cp+'\')" style="flex:1;padding:12px 14px;border-radius:10px;border:2px solid #97C459;font-size:28px;font-weight:700;color:#3B6D11;outline:none;background:#f8fff5">'
+      +'<button onclick="efDolaresAmt=\'\';showEfectivoModal(\''+cp+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid #ddd;background:transparent;cursor:pointer;font-size:13px;color:#999">&#x2715;</button>'
+      +'</div>'
+      +(dolarMonto>0?'<div style="text-align:center;font-size:13px;color:#555;margin-bottom:14px;background:#f0faf6;padding:8px;border-radius:8px">$'+dolarMonto.toFixed(2)+' &times; &#8353;'+tipoCambio+' = <strong style="color:#085041;font-size:15px">'+fmt(enColones)+'</strong></div>':'<div style="height:8px"></div>')
+      +'<div class="totbar">'
+      +'<div class="totbox"><div class="totbox-lbl">A cobrar</div><div class="totbox-val azul">'+fmt(total)+'</div></div>'
+      +'<div class="totbox"><div class="totbox-lbl">Recibido</div><div class="totbox-val verde" id="ef-rec-val">'+(dolarMonto>0?fmt(enColones):'&mdash;')+'</div></div>'
+      +'<div class="totbox"><div class="totbox-lbl" id="ef-vue-lbl">'+vueltolbl+'</div><div class="totbox-val '+vueltoClass+'" id="ef-vue-val">'+vueltoTxt+'</div></div>'
+      +'</div>'
+      +'<button id="ef-confirm-btn" class="btn-cobrar" style="margin:0;'+(!canConfirm?'background:#bbb;cursor:default;':'')+'" '+(canConfirm?'':'disabled')+' onclick="confirmarPago(\''+cp+'\')">'+(canConfirm?'&#10003; Confirmar cobro':'Monto insuficiente')+'</button>';
+  } else {
+    const recibido=totalBilletes();const vuelto=recibido-total;
+    const billetesHtml=DENOMINACIONES.map(function(d){const cnt=efBilletes[d.val]||0;const esB=d.val>=1000;
+      return'<div class="billete-btn" onclick="addBillete('+d.val+',\''+cp+'\')" style="background:'+(esB?'#FAEEDA':'#E6F1FB')+';border-color:'+(esB?'#EF9F27':'#85B7EB')+'">'
+        +(cnt>0?'<div class="billete-count">'+cnt+'</div>':'')
+        +'<div class="billete-val" style="color:'+(esB?'#633806':'#0C447C')+'">'+fmt(d.val)+'</div>'
+        +'<div class="billete-tipo" style="color:'+(esB?'#854F0B':'#185FA5')+'">'+d.lbl+'</div>'
+        +'</div>';}).join('');
+    const desgloseRows=DENOMINACIONES.filter(function(d){return efBilletes[d.val]>0;}).map(function(d){return'<div class="desglose-row"><span style="flex:1;color:#666">'+fmt(d.val)+'</span><span style="font-weight:600;color:#111;min-width:30px;text-align:center">'+efBilletes[d.val]+'&times;</span><span style="color:#666;min-width:65px;text-align:right">'+fmt(d.val*efBilletes[d.val])+'</span><button class="desglose-x" onclick="remBillete('+d.val+',\''+cp+'\')">&times;</button></div>';}).join('');
+    let vueltoTxt='&mdash;',vueltoClass='azul';
+    if(recibido>0&&vuelto===0)vueltoTxt='Exacto';
+    else if(vuelto>0){vueltoTxt=fmt(vuelto);vueltoClass='verde';}
+    else if(vuelto<0){vueltoTxt='Falta '+fmt(Math.abs(vuelto));vueltoClass='rojo';}
+    const canConfirm=recibido>=total&&recibido>0;
+    bodyHtml='<div style="font-size:11px;font-weight:600;color:#999;margin-bottom:8px">Toca para sumar &mdash; cada toque agrega una unidad</div>'
+      +'<div class="billete-grid">'+billetesHtml+'</div>'
+      +(desgloseRows?'<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:4px">Desglose recibido</div><div class="desglose">'+desgloseRows+'</div>':'')
+      +'<div class="totbar">'
+      +'<div class="totbox"><div class="totbox-lbl">A cobrar</div><div class="totbox-val azul">'+fmt(total)+'</div></div>'
+      +'<div class="totbox"><div class="totbox-lbl">Recibido</div><div class="totbox-val verde">'+(recibido?fmt(recibido):'&mdash;')+'</div></div>'
+      +'<div class="totbox"><div class="totbox-lbl">'+(vuelto<0?'Falta':'Vuelto')+'</div><div class="totbox-val '+vueltoClass+'">'+vueltoTxt+'</div></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:4px">'
+      +'<button class="btn-sec" style="width:auto;padding:8px 16px" onclick="limpiarBilletes(\''+cp+'\')">Limpiar</button>'
+      +'<button class="btn-cobrar" style="margin:0;'+(!canConfirm?'background:#bbb;cursor:default;':'')+'" '+(canConfirm?'':'disabled')+' onclick="confirmarPago(\''+cp+'\')">'+(canConfirm?'&#10003; Confirmar cobro':'Monto insuficiente')+'</button>'
+      +'</div>';
+  }
+  div.innerHTML='<div class="ef-modal">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+    +'<div style="font-size:15px;font-weight:600;color:#111">Efectivo &mdash; '+activeMesa+'</div>'
+    +'<button class="btn-sec" style="width:auto;padding:6px 14px" onclick="closeEfModal()">&larr; Atras</button>'
+    +'</div>'
+    +toggleHtml+bodyHtml+'</div>';
   document.body.appendChild(div);
+  if(efModoUSD){setTimeout(function(){const inp=document.getElementById('efDolarInput');if(inp){inp.focus();inp.select();}},80);}
 }
 function addBillete(v,cp){efBilletes[v]=(efBilletes[v]||0)+1;showEfectivoModal(cp);}
 function remBillete(v,cp){if(efBilletes[v]>0)efBilletes[v]--;if(!efBilletes[v])delete efBilletes[v];showEfectivoModal(cp);}
 function limpiarBilletes(cp){efBilletes={};showEfectivoModal(cp);}
-function closeEfModal(){const m=document.getElementById("efModal");if(m)m.remove();}
+function closeEfModal(){const m=document.getElementById("efModal");if(m)m.remove();efModoUSD=false;efDolaresAmt='';}
 function calcVueltoDesglose(v){const res=[];let rem=v;for(const d of DENOMINACIONES){const cnt=Math.floor(rem/d.val);if(cnt>0){res.push({val:d.val,cnt});rem-=d.val*cnt;}if(rem<=0)break;}return res;}
 
 function confirmarPago(cobradoPor){
   const ord=orders[activeMesa];const{sub,descMonto,subDesc,servMonto,tax,total}=getTotal();
-  const recibido=payMethod==="Efectivo"?totalBilletes():total;
+  const recibido=payMethod==="Efectivo"?totalEfRecibido():total;
   const vuelto=Math.max(0,recibido-total);
-  const vueltoDesg=payMethod==="Efectivo"&&vuelto>0?calcVueltoDesglose(vuelto):[];
+  const vueltoDesg=payMethod==="Efectivo"&&!efModoUSD&&vuelto>0?calcVueltoDesglose(vuelto):[];
   const now=new Date();const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
-  ventas.push({id:nextVid++,hora:hm,fecha:localISO(now),mesa:activeMesa,items:[...ord.items],metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,pagos:null});
-  if(payMethod==="Efectivo"){for(const[v,c]of Object.entries(efBilletes))cajaBilletes[v]=(cajaBilletes[v]||0)+c;for(const vd of vueltoDesg)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
+  const _dolaresRec=efModoUSD?parseFloat(efDolaresAmt)||0:0;
+  const _tcUsado=efModoUSD?tipoCambio:0;
+  ventas.push({id:nextVid++,hora:hm,fecha:localISO(now),mesa:activeMesa,items:[...ord.items],metodo:payMethod,cobradoPor:cobradoPor||"&mdash;",sub,descMonto,servMonto,tax,total,recibido,vuelto,billetesRecibidos:{...efBilletes},vueltoDesg,dolaresRecibidos:_dolaresRec,tipoCambioUsado:_tcUsado,pagos:null});
+  if(payMethod==="Efectivo"&&!efModoUSD){for(const[v,c]of Object.entries(efBilletes))cajaBilletes[v]=(cajaBilletes[v]||0)+c;for(const vd of vueltoDesg)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
+  efModoUSD=false;efDolaresAmt='';
   const ventaGuardada=ventas[ventas.length-1];
   orders[activeMesa]={items:[]};saveLS();closeEfModal();closeMesa();
   showTicket(ventaGuardada);
@@ -2278,7 +2351,15 @@ function renderCierre(){
 let _cierreEnProceso=false;
 function hacerCierre(){
   if(_cierreEnProceso)return;
-  if(!confirm("Confirmar cierre del periodo?"))return;
+  const hoy=localISO();
+  const cierresHoy=cierres.filter(function(c){return c.fechaISO===hoy;}).length;
+  if(cierresHoy>=2){toast('Ya se realizaron los 2 cierres del día de hoy');return;}
+  const esFinDia=cierresHoy===1; // segundo cierre = cierre final del día
+  const turnoNum=cierresHoy+1;
+  const msgConfirm=esFinDia
+    ?'⚠️ Cierre final del día — Turno 2\n\nDespués de este cierre no se registran más ventas hoy.\n¿Confirmar cierre del día?'
+    :'Confirmar cierre de turno (Turno 1 → inicio Turno 2)?';
+  if(!confirm(msgConfirm))return;
   _cierreEnProceso=true;setTimeout(function(){_cierreEnProceso=false;},3000);
   const d=new Date();
   const pad=n=>String(n).padStart(2,"0");
@@ -2293,7 +2374,7 @@ function hacerCierre(){
   const efEnCaja=cajainicial+efNeto;
   const utilidad=efNeto+tc+si;
   const cierreData={
-    fecha,fechaISO:localISO(d),
+    fecha,fechaISO:hoy,turno:turnoNum,
     numVentas:ventas.length,
     ef,tc,si,totalVentas,
     gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
@@ -2305,15 +2386,51 @@ function hacerCierre(){
   };
   cierres.push(cierreData);
   printCierreReport(cierreData);
-  // Limpiar el periodo — cada cierre empieza desde cero
   ventas=[];gastos=[];cajaBilletes={};
-  try{fbVentas.set({});}catch(e){} // limpiar ventas en Firebase tambien
-  calCierresSelDia=localISO(d);
+  try{fbVentas.set({});}catch(e){}
+  calCierresSelDia=hoy;
   calCierresMes=calCierresSelDia.slice(0,7);
   saveLS();
   renderCierre();
-  localStorage.removeItem('rpos_cajaPedida'); // nuevo período → resetear bandera caja
-  setTimeout(()=>showCajaInicialModal(true),600);
+  enviarNotifCierre(cierreData,turnoNum); // notificación al celular
+  localStorage.removeItem('rpos_cajaPedida');
+  if(esFinDia){
+    // Cierre final del día — no pide caja, solo logout
+    setTimeout(function(){
+      toast('✅ Día finalizado. ¡Hasta mañana! 🌙');
+      setTimeout(doLogout,1800);
+    },600);
+  } else {
+    // Cambio de turno — pide caja inicial para el siguiente turno
+    setTimeout(function(){showCajaInicialModal(true);},600);
+  }
+}
+function probarNotifCierre(){
+  const topic=(document.getElementById('tc-ntfy')?.value||ticketConfig.ntfyTopic||'').trim();
+  if(!topic){toast('Primero ingresá el nombre del tema ntfy');return;}
+  const nombre=ticketConfig.nombre||'POS';
+  fetch('https://ntfy.sh/'+encodeURIComponent(topic),{
+    method:'POST',body:'¡Las notificaciones de cierre están funcionando! 🎉\nSoda El Tucan POS está configurado correctamente.',
+    headers:{'Title':nombre+' — Prueba de notificación','Priority':'3','Tags':'white_check_mark'}
+  }).then(function(){toast('✓ Notificación de prueba enviada — revisá tu celular');})
+    .catch(function(){toast('Error al enviar — verificá tu conexión a internet');});
+}
+function enviarNotifCierre(c,turno){
+  const topic=(ticketConfig.ntfyTopic||'').trim();
+  if(!topic)return;
+  const nombre=ticketConfig.nombre||'POS';
+  const fmtN=function(n){return'₡'+Math.round(n||0).toLocaleString('es-CR');};
+  const lines=[
+    (c.numVentas||0)+' ventas | Total: '+fmtN(c.totalVentas),
+    'Ef: '+fmtN(c.ef)+'  TC: '+fmtN(c.tc)+'  SINPE: '+fmtN(c.si),
+    'Gastos caja: '+fmtN(c.gastoCaja),
+    'Utilidad: '+fmtN(c.utilidad),
+    'Hora: '+c.fecha
+  ].join('\n');
+  fetch('https://ntfy.sh/'+encodeURIComponent(topic),{
+    method:'POST',body:lines,
+    headers:{'Title':nombre+' — Cierre Turno '+turno,'Priority':'3','Tags':'white_check_mark,moneybag'}
+  }).catch(function(){});
 }
 function totalCajainicial(){return cajainicial;}
 // Todas las ventas históricas (cierres pasados) + periodo actual
@@ -2657,7 +2774,11 @@ function buildTicketHTML(v){
   } else {
     h+=row('Metodo:',v.metodo);
     if(v.metodo==='Efectivo'){
-      h+=row('Recibido:',fmt(v.recibido));
+      if(v.dolaresRecibidos>0){
+        h+=row('Recibido:','$'+v.dolaresRecibidos.toFixed(2)+' USD ('+fmt(v.recibido)+')');
+      } else {
+        h+=row('Recibido:',fmt(v.recibido));
+      }
       h+=`<div class="ticket-vuelto"><span>Vuelto:</span><span style="color:#085041">${v.vuelto>0?fmt(v.vuelto):'Exacto &#10003;'}</span></div>`;
     }
   }
@@ -2691,14 +2812,14 @@ function printTicket(){
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tiquete</title>
   <style>
     @page{size:80mm auto;margin:3mm}
-    *{box-sizing:border-box;margin:0;padding:0}
+    *{box-sizing:border-box;margin:0;padding:0;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{font-family:'Courier New',Courier,monospace;font-size:14px;padding:6px 8px;width:74mm;line-height:1.7;color:#000}
     .ticket-center{text-align:center}
     .ticket-row{display:flex;justify-content:space-between;gap:6px}
     .ticket-row span:last-child{white-space:nowrap}
     .ticket-bold{display:flex;justify-content:space-between;font-weight:700;font-size:15px;gap:6px}
     .ticket-hr-solid{border:none;border-top:2px solid #000;margin:5px 0}
-    .ticket-hr-dash{border:none;border-top:1px dashed #555;margin:5px 0}
+    .ticket-hr-dash{border:none;border-top:1px dashed #000;margin:5px 0}
     .ticket-vuelto{display:flex;justify-content:space-between;font-weight:700;font-size:15px;padding:2px 0}
   </style></head><body>${content.innerHTML}</body></html>`);
   w.document.close();w.focus();
@@ -2716,6 +2837,7 @@ function renderTicketConfig(){
   const fi=document.getElementById("tc-itbis");if(fi)fi.checked=tc.defaultItbis!==false;
   const fs2=document.getElementById("tc-servicio");if(fs2)fs2.checked=tc.defaultServicio===true;
   const fe=document.getElementById("tc-empleado");if(fe)fe.checked=tc.mostrarEmpleado!==false;
+  const fn2=document.getElementById("tc-ntfy");if(fn2)fn2.value=tc.ntfyTopic||'';
   renderTicketPreview();
 }
 function saveTicketConfig(){
@@ -2727,7 +2849,8 @@ function saveTicketConfig(){
   ticketConfig.defaultItbis=document.getElementById("tc-itbis")?.checked!==false;
   ticketConfig.defaultServicio=document.getElementById("tc-servicio")?.checked===true;
   ticketConfig.mostrarEmpleado=document.getElementById("tc-empleado")?.checked!==false;
-  saveLS();renderTicketPreview();toast("\u2713 Tiquete guardado");
+  ticketConfig.ntfyTopic=document.getElementById("tc-ntfy")?.value.trim()||'';
+  saveLS();renderTicketPreview();toast("\u2713 Configuraci\u00f3n guardada");
 }
 function renderTicketPreview(){
   const panel=document.getElementById("ticketPreviewPanel");if(!panel)return;
