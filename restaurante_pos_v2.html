@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Soda El Tucan — POS</title>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
 body{background:#f5f5f0;min-height:100vh}
@@ -105,6 +103,10 @@ body{background:#f5f5f0;min-height:100vh}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
 .tbl th{text-align:left;padding:6px 8px;color:#666;border-bottom:1px solid #eee;font-weight:600}
 .tbl td{padding:7px 8px;color:#111;border-bottom:1px solid #f5f5f5}
+.tbl tbody tr{cursor:pointer;transition:background .08s}
+.tbl tbody tr:hover{background:#f5faf7}
+.tbl tbody tr.venta-sel{background:#d4f0e4!important;outline:2px solid #1D9E75;outline-offset:-2px}
+.tbl tbody tr.venta-sel td{color:#04342C}
 .tbl tr:last-child td{border:none}
 .badge{font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap}
 .bg-ef{background:#E1F5EE;color:#085041}
@@ -244,7 +246,7 @@ body{background:#f5f5f0;min-height:100vh}
   <button class="navbtn" onclick="goScreen('usuarios')" id="nav-usuarios">Usuarios</button>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
     <span id="activeUserLabel" style="font-size:12px;color:#666;font-weight:500"></span>
-    <button id="nav-prueba" onclick="toggleModoPrueba()" title="Activar/desactivar modo de pruebas" style="padding:5px 10px;border-radius:8px;border:1px solid #F59E0B;background:transparent;font-size:11px;cursor:pointer;color:#92400E;font-weight:600">🧪 Prueba</button>
+<button id="nav-prueba" onclick="toggleModoPrueba()" title="Activar/desactivar modo de pruebas" style="padding:5px 10px;border-radius:8px;border:1px solid #F59E0B;background:transparent;font-size:11px;cursor:pointer;color:#92400E;font-weight:600">🧪 Prueba</button>
     <button class="navbtn" onclick="doLogout()" style="color:#E24B4A;border-color:#EDBBBA">&#9211; Salir</button>
   </div>
 </div>
@@ -467,37 +469,86 @@ function limpiarDatosPrueba(){
   saveLS();renderSalon();renderCierre();
   toast('🧹 Datos de prueba eliminados');
 }
-let fbOrders={set:()=>{},on:()=>{}};// fallback stub
-let fbVentas={set:()=>{},on:()=>{}};
+// ── FIREBASE — carga asíncrona, no bloquea la página ──
+let fbOrders={set:()=>{},on:()=>{},off:()=>{}};
+let fbVentas={set:()=>{},on:()=>{},off:()=>{}};
 let _fbVentasReady=false;
-try{
-  firebase.initializeApp(FB_CONFIG);
-  const _ordRef=modoPrueba?'pos_orders_TEST':'pos_orders';
-  const _venRef=modoPrueba?'pos_ventas_TEST':'pos_ventas';
-  fbOrders=firebase.database().ref(_ordRef);
-  fbOrders.on('value',snap=>{
-    const d=snap.val()||{};
-    Object.keys(d).forEach(m=>{if(d[m]&&Array.isArray(d[m].items))orders[m]=d[m];});
-    renderSalon();
-    if(activeMesa&&document.getElementById('mesaModal'))renderMesaModal();
-  });
-  fbVentas=firebase.database().ref(_venRef);
-  fbVentas.on('value',snap=>{
-    const d=snap.val()||{};
-    const remotas=Object.values(d);
-    if(remotas.length){
-      const localIds=new Set(ventas.map(v=>v.id));
-      remotas.forEach(v=>{if(!localIds.has(v.id))ventas.push(v);});
-      ventas.sort((a,b)=>a.id-b.id);
-      const maxId=Math.max(...ventas.map(v=>v.id||0));
-      if(maxId>=nextVid)nextVid=maxId+1;
-      try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
-    }
-    _fbVentasReady=true;
-    const s=document.getElementById('screen-ventas');
-    if(s&&s.classList.contains('on'))renderVentas();
-  });
-}catch(e){console.warn('Firebase no disponible, modo offline:',e.message);}
+let _fbInited=false;
+
+function _actualizarIndicadorFb(conectado){
+  const dot=document.getElementById('fb-dot');
+  const lbl=document.getElementById('fb-lbl');
+  if(dot)dot.style.background=conectado?'#1D9E75':'#F59E0B';
+  if(lbl)lbl.textContent=conectado?'Conectado':'Sin internet';
+}
+
+function _tryInitFb(){
+  if(typeof firebase==='undefined'||typeof firebase.database==='undefined')return;
+  if(_fbInited)return;
+  _fbInited=true;
+  try{
+    if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);
+    const _ordRef=modoPrueba?'pos_orders_TEST':'pos_orders';
+    const _venRef=modoPrueba?'pos_ventas_TEST':'pos_ventas';
+    fbOrders=firebase.database().ref(_ordRef);
+    fbOrders.on('value',function(snap){
+      const d=snap.val()||{};
+      Object.keys(d).forEach(function(m){if(d[m]&&Array.isArray(d[m].items))orders[m]=d[m];});
+      renderSalon();
+      if(activeMesa&&document.getElementById('mesaModal'))renderMesaModal();
+    });
+    fbVentas=firebase.database().ref(_venRef);
+    fbVentas.on('value',function(snap){
+      const d=snap.val()||{};
+      const remotas=Object.values(d);
+      if(remotas.length){
+        const localIds=new Set(ventas.map(function(v){return v.id;}));
+        remotas.forEach(function(v){if(!localIds.has(v.id))ventas.push(v);});
+        ventas.sort(function(a,b){return a.id-b.id;});
+        const maxId=Math.max.apply(null,ventas.map(function(v){return v.id||0;}));
+        if(maxId>=nextVid)nextVid=maxId+1;
+        try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
+      }
+      _fbVentasReady=true;
+      const s=document.getElementById('screen-ventas');
+      if(s&&s.classList.contains('on'))renderVentas();
+    });
+    firebase.database().ref('.info/connected').on('value',function(snap){
+      _actualizarIndicadorFb(snap.val()===true);
+    });
+    console.log('Firebase conectado');
+  }catch(e){console.warn('Firebase error:',e.message);}
+}
+
+function _cargarFirebase(){
+  const s1=document.createElement('script');
+  s1.src='https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js';
+  s1.async=true;
+  s1.onerror=function(){console.warn('Firebase app no disponible (sin internet)');};
+  s1.onload=function(){
+    const s2=document.createElement('script');
+    s2.src='https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js';
+    s2.async=true;
+    s2.onload=function(){_tryInitFb();};
+    s2.onerror=function(){console.warn('Firebase database no disponible (sin internet)');};
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s1);
+}
+
+// Eventos de conexión
+window.addEventListener('online',function(){
+  toast('🟢 Internet restaurado');
+  _actualizarIndicadorFb(false);
+  if(!_fbInited)_cargarFirebase();
+});
+window.addEventListener('offline',function(){
+  toast('🔴 Sin internet — funcionando en modo local');
+  _actualizarIndicadorFb(false);
+});
+
+// Cargar Firebase en segundo plano (no bloquea la página)
+_cargarFirebase();
 const SCREEN_LABELS={salon:"Salon",ventas:"Ventas",gastos:"Gastos",cierre:"Cierre","menu-admin":"Menu",usuarios:"Usuarios"};
 const DENOMINACIONES=[
   {val:20000,lbl:"Billete"},{val:10000,lbl:"Billete"},
@@ -717,6 +768,7 @@ let calCierresSelDia=null;
 let calGastosMes=new Date().toISOString().slice(0,7);
 let calGastosSelDia=localISO(); // arranca mostrando hoy
 let _ventasDisplayPool=[];
+let _ventasSelIdx=-1; // índice seleccionado en la tabla de ventas (para navegación por flechas)
 let _lastCierreReportHTML=''; // para reimprimir el último reporte de cierre
 // caja inicial: se usa localStorage con fecha del día para no repetir en recargas
 let menuAdminCatFiltro=null;
@@ -1859,9 +1911,9 @@ function showResultadoSplit(pagos,cobradoPor,total){
 }
 
 /* ── VENTAS ── */
-function setVentasFiltro(emp){ventasFiltro=emp;renderVentas();}
-function setVentasMesFiltro(m){ventasMesFiltro=m;ventasDiaFiltro=null;ventasFiltro=null;renderVentas();}
-function setVentasDiaFiltro(d){ventasDiaFiltro=d;ventasFiltro=null;renderVentas();}
+function setVentasFiltro(emp){ventasFiltro=emp;_ventasSelIdx=-1;renderVentas();}
+function setVentasMesFiltro(m){ventasMesFiltro=m;ventasDiaFiltro=null;ventasFiltro=null;_ventasSelIdx=-1;renderVentas();}
+function setVentasDiaFiltro(d){ventasDiaFiltro=d;ventasFiltro=null;_ventasSelIdx=-1;renderVentas();}
 
 /* ── CALENDARIO ── */
 function buildCalHTML(year,month,datesV,datesC,selDate,prevFn,nextFn,dayFn,leyenda){
@@ -1939,9 +1991,11 @@ function _ventasTablaHTML(lista,poolOffset){
     const descBadge=v.descMonto>0?'<div style="font-size:10px;color:#E24B4A">desc. '+fmt(v.descMonto)+'</div>':"";
     const viCurrent=ventas.indexOf(v);
     const canDelete=activeUser&&activeUser.role==='admin'&&viCurrent>=0;
+    const canRestore=canDelete&&v.fecha===localISO();
     const poolIdx=poolOffset+k;
-    return'<tr>'+
-      '<td style="font-size:11px;color:#888">'+(v.fecha||'&mdash;')+'</td>'+
+    const isSel=_ventasSelIdx===poolIdx;
+    return'<tr id="vrow-'+poolIdx+'" class="'+(isSel?'venta-sel':'')+'" onclick="selVentaRow('+poolIdx+')">'+
+      '<td style="font-size:11px">'+(v.fecha||'&mdash;')+'</td>'+
       '<td>'+v.hora+'</td>'+
       '<td>'+v.mesa+'</td>'+
       '<td><span class="badge '+badge+'">'+v.metodo+'</span>'+extra+'</td>'+
@@ -1949,8 +2003,9 @@ function _ventasTablaHTML(lista,poolOffset){
       '<td>'+fmt(v.recibido)+'</td>'+
       '<td>'+(v.vuelto>0?fmt(v.vuelto):'&mdash;')+'</td>'+
       '<td><strong>'+fmt(v.total)+'</strong>'+descBadge+'</td>'+
-      '<td style="display:flex;gap:4px;align-items:center">'+
+      '<td style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">'+
         '<button onclick="reprintTiquete(_ventasDisplayPool['+poolIdx+'])" title="Reimprimir" style="background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">🖸</button>'+
+        (canRestore?'<button onclick="restaurarMesa(_ventasDisplayPool['+poolIdx+'])" title="Restaurar mesa" style="background:none;border:1px solid #bde;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px">↩</button>':'')+
         (canDelete?'<button onclick="borrarVenta('+viCurrent+')" title="Eliminar" style="background:none;border:1px solid #fcc;border-radius:6px;cursor:pointer;padding:3px 7px;font-size:14px;color:#c0392b">🗑</button>':'')+
       '</td>'+
     '</tr>';
@@ -2081,10 +2136,41 @@ function renderVentas(){
   tbody.innerHTML=_ventasTablaHTML(vf,0);
 }
 
+function selVentaRow(poolIdx){
+  const prev=document.querySelector('.tbl tbody tr.venta-sel');
+  if(prev)prev.classList.remove('venta-sel');
+  _ventasSelIdx=poolIdx;
+  const row=document.getElementById('vrow-'+poolIdx);
+  if(row){row.classList.add('venta-sel');row.scrollIntoView({block:'nearest',behavior:'smooth'});}
+}
+
+function restaurarMesa(v){
+  if(!v)return;
+  if(!activeUser||activeUser.role!=='admin'){toast('Solo admin puede restaurar mesas');return;}
+  if(v.fecha!==localISO()){toast('Solo se pueden restaurar ventas del día de hoy');return;}
+  const mesaTarget=v.mesa;
+  const currentItems=(orders[mesaTarget]&&orders[mesaTarget].items)||[];
+  let msg='¿Restaurar '+mesaTarget+' con los platillos de esta venta?\n\n';
+  (v.items||[]).forEach(function(i){msg+=(i.qty>1?i.qty+'x ':'')+i.name+' ₡'+fmt(i.price*i.qty)+'\n';});
+  msg+='\nTotal: ₡'+fmt(v.total);
+  if(currentItems.length>0)msg+='\n\n⚠️ Esa mesa ya tiene '+currentItems.length+' ítem(s). Los platillos se agregarán al final.';
+  msg+='\n\nLa venta se eliminará del historial de hoy.';
+  if(!confirm(msg))return;
+  const idx=ventas.indexOf(v);
+  if(idx>=0)ventas.splice(idx,1);
+  if(!orders[mesaTarget])orders[mesaTarget]={items:[]};
+  if(!orders[mesaTarget].items)orders[mesaTarget].items=[];
+  (v.items||[]).forEach(function(i){orders[mesaTarget].items.push(Object.assign({},i));});
+  _ventasSelIdx=-1;
+  saveLS();renderVentas();
+  toast('✅ '+mesaTarget+' restaurada — '+( v.items||[]).length+' platillo(s) recuperado(s)');
+}
+
 function borrarVenta(idx){
   const v=ventas[idx];if(!v)return;
   if(!confirm("Eliminar venta de "+fmt(v.total)+" ("+v.mesa+" - "+v.hora+")?\n\nEsta accion no se puede deshacer."))return;
   ventas.splice(idx,1);
+  _ventasSelIdx=-1;
   saveLS();renderVentas();
   toast("Venta eliminada");
 }
@@ -3124,6 +3210,25 @@ if(TABLET_MODE){
 }
 showLoginUsers();
 renderSalon();
+
+// Navegación por teclado en tabla de ventas
+document.addEventListener('keydown',function(e){
+  const vs=document.getElementById('screen-ventas');
+  if(!vs||!vs.classList.contains('on'))return;
+  // No interferir si hay un input activo
+  if(document.activeElement&&(document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'))return;
+  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+  e.preventDefault();
+  const rows=Array.from(document.querySelectorAll('.tbl tbody tr[id^="vrow-"]'));
+  if(!rows.length)return;
+  const ids=rows.map(function(r){return parseInt(r.id.replace('vrow-',''));});
+  const curPos=_ventasSelIdx>=0?ids.indexOf(_ventasSelIdx):-1;
+  let newPos;
+  if(e.key==='ArrowDown')newPos=curPos<ids.length-1?curPos+1:0;
+  else newPos=curPos>0?curPos-1:ids.length-1;
+  selVentaRow(ids[newPos]);
+});
+
 }catch(err){document.body.innerHTML='<div style="padding:40px;font-family:monospace;background:#fff"><h2 style="color:red">Error al cargar</h2><pre style="color:#333;white-space:pre-wrap;margin-top:12px">'+err.stack+'</pre></div>';}
 </script>
 </body>
