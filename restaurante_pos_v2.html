@@ -1170,21 +1170,7 @@ function imprimirPreCuenta(){
   h+=hr('solid');
   h+=ctr('* Pendiente de pago *','font-size:12px;font-style:italic');
   if(tc.pieMsg){h+=hr('dash');h+=ctr(tc.pieMsg,'font-size:13px;font-style:italic');}
-  const w=window.open('','_blank','width=420,height=700');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Cuenta — ${activeMesa}</title>
-  <style>
-    @page{size:80mm auto;margin:3mm}
-    *{box-sizing:border-box;margin:0;padding:0;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    body{font-family:'Courier New',Courier,monospace;font-size:14px;padding:6px 8px;width:74mm;line-height:1.8;color:#000;font-weight:600}
-    .ticket-center{text-align:center}
-    .ticket-row{display:flex;justify-content:space-between;gap:6px;font-weight:600}
-    .ticket-row span:last-child{white-space:nowrap}
-    .ticket-bold{display:flex;justify-content:space-between;font-weight:800;font-size:16px;gap:6px}
-    .ticket-hr-solid{border:none;border-top:2.5px solid #000;margin:5px 0}
-    .ticket-hr-dash{border:none;border-top:1.5px dashed #000;margin:5px 0}
-  </style></head><body>${h}</body></html>`);
-  w.document.close();w.focus();
-  setTimeout(()=>{w.print();},400);
+  _abrirImpresion(h,'Cuenta — '+activeMesa);
 }
 function totalBilletes(){return Object.entries(efBilletes).reduce((a,[v,c])=>a+parseInt(v)*c,0);}
 
@@ -1959,12 +1945,32 @@ function calVentasClickDia(iso){ventasDiaFiltro=(ventasDiaFiltro===iso?null:iso)
 function calCierresPrev(){const[y,m]=calCierresMes.split('-').map(Number);const d=new Date(y,m-2,1);calCierresMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderCierre();}
 function calCierresNext(){const[y,m]=calCierresMes.split('-').map(Number);const d=new Date(y,m,1);calCierresMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderCierre();}
 function calCierresClickDia(iso){calCierresSelDia=calCierresSelDia===iso?null:iso;renderCierre();}
-function reprintTiquete(v){
+// CSS compartido para todos los tiquetes — mismo resultado en todas las funciones de impresión
+function _ticketCSS(){
+  return`<style>
+    @page{size:80mm auto;margin:3mm}
+    *{box-sizing:border-box;margin:0;padding:0;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{font-family:'Courier New',Courier,monospace;font-size:14px;padding:6px 8px;width:74mm;line-height:1.8;color:#000;font-weight:600}
+    .ticket-center{text-align:center}
+    .ticket-row{display:flex;justify-content:space-between;gap:6px;font-weight:600}
+    .ticket-row span:last-child{white-space:nowrap}
+    .ticket-bold{display:flex;justify-content:space-between;font-weight:800;font-size:16px;gap:6px}
+    .ticket-hr-solid{border:none;border-top:2.5px solid #000;margin:5px 0}
+    .ticket-hr-dash{border:none;border-top:1.5px dashed #000;margin:5px 0}
+    .ticket-vuelto{display:flex;justify-content:space-between;font-weight:800;font-size:16px;padding:2px 0}
+  </style>`;
+}
+function _abrirImpresion(html,titulo){
   const w=window.open('','_blank','width=420,height=650');
   if(!w){toast('Permite ventanas emergentes para imprimir');return;}
-  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tiquete</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Courier New",Courier,monospace;font-size:12px;padding:16px;max-width:300px;line-height:1.65;color:#111}.ticket-center{text-align:center}.ticket-row{display:flex;justify-content:space-between;gap:6px}.ticket-row span:last-child{white-space:nowrap}.ticket-bold{display:flex;justify-content:space-between;font-weight:700;font-size:13px;gap:6px}.ticket-hr-solid{border:none;border-top:1px solid #555;margin:5px 0}.ticket-hr-dash{border:none;border-top:1px dashed #999;margin:5px 0}.ticket-vuelto{display:flex;justify-content:space-between;font-weight:700;padding:2px 0}@media print{body{padding:4px}}</style></head><body>'+buildTicketHTML(v)+'</body></html>');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+(titulo||'Tiquete')+'</title>'+_ticketCSS()+'</head><body>'+html+'</body></html>');
   w.document.close();w.focus();
-  setTimeout(()=>{w.print();},400);
+  setTimeout(function(){w.print();},400);
+}
+
+function reprintTiquete(v){
+  if(!v){toast('Venta no encontrada');return;}
+  _abrirImpresion(buildTicketHTML(v),'Tiquete #'+(v.id||''));
 }
 function buildPeriodosDelDia(dia){
   // Construye los periodos para un día dado: uno por cada cierre que tiene ventas en ese día + periodo actual
@@ -2941,22 +2947,7 @@ function showTicket(v){
 function cerrarTicket(){const m=document.getElementById("ticketPrintRoot");if(m)m.remove();renderSalon();}
 function printTicket(){
   const content=document.getElementById("ticketPrintArea");if(!content)return;
-  const w=window.open('','_blank','width=420,height=650');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tiquete</title>
-  <style>
-    @page{size:80mm auto;margin:3mm}
-    *{box-sizing:border-box;margin:0;padding:0;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    body{font-family:'Courier New',Courier,monospace;font-size:14px;padding:6px 8px;width:74mm;line-height:1.8;color:#000;font-weight:600}
-    .ticket-center{text-align:center}
-    .ticket-row{display:flex;justify-content:space-between;gap:6px;font-weight:600}
-    .ticket-row span:last-child{white-space:nowrap}
-    .ticket-bold{display:flex;justify-content:space-between;font-weight:800;font-size:16px;gap:6px}
-    .ticket-hr-solid{border:none;border-top:2.5px solid #000;margin:5px 0}
-    .ticket-hr-dash{border:none;border-top:1.5px dashed #000;margin:5px 0}
-    .ticket-vuelto{display:flex;justify-content:space-between;font-weight:800;font-size:16px;padding:2px 0}
-  </style></head><body>${content.innerHTML}</body></html>`);
-  w.document.close();w.focus();
-  setTimeout(()=>{w.print();},400);
+  _abrirImpresion(content.innerHTML,'Tiquete');
 }
 
 /* ── CONFIG TIQUETE ── */
