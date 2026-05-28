@@ -1167,6 +1167,7 @@ function imprimirPreCuenta(){
   h+=row('ITBIS 13%:',fmt(tax));
   h+=hr('solid');
   h+=`<div class="ticket-bold"><span>TOTAL:</span><span>${fmt(total)}</span></div>`;
+  h+=row('Total USD:','$'+(total/tipoCambio).toFixed(2));
   h+=hr('solid');
   h+=ctr('* Pendiente de pago *','font-size:12px;font-style:italic');
   if(tc.pieMsg){h+=hr('dash');h+=ctr(tc.pieMsg,'font-size:13px;font-style:italic');}
