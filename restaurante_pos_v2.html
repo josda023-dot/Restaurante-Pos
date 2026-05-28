@@ -2905,6 +2905,8 @@ function buildTicketHTML(v){
   h+=row('ITBIS 13%:',v.tax>0?fmt(v.tax):fmt(0));
   h+=hr('solid');
   h+=row('<strong>TOTAL:</strong>',`<strong>${fmt(v.total)}</strong>`,'ticket-bold');
+  const _tc=v.tipoCambioUsado||tipoCambio;
+  h+=row('Total USD:','$'+(v.total/_tc).toFixed(2));
   h+=hr('solid');
   // Payment
   if(v.pagos){
@@ -2915,11 +2917,12 @@ function buildTicketHTML(v){
     h+=row('Metodo:',v.metodo);
     if(v.metodo==='Efectivo'){
       if(v.dolaresRecibidos>0){
-        h+=row('Recibido:','$'+v.dolaresRecibidos.toFixed(2)+' USD ('+fmt(v.recibido)+')');
+        h+=row('Recibido:','$'+v.dolaresRecibidos.toFixed(2)+' USD');
+        h+=`<div class="ticket-vuelto"><span>Vuelto:</span><span>${v.vuelto>0?fmt(v.vuelto):'Exacto &#10003;'}</span></div>`;
       } else {
         h+=row('Recibido:',fmt(v.recibido));
+        h+=`<div class="ticket-vuelto"><span>Vuelto:</span><span>${v.vuelto>0?fmt(v.vuelto):'Exacto &#10003;'}</span></div>`;
       }
-      h+=`<div class="ticket-vuelto"><span>Vuelto:</span><span>${v.vuelto>0?fmt(v.vuelto):'Exacto &#10003;'}</span></div>`;
     }
   }
   // Footer
