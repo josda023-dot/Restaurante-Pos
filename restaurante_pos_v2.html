@@ -172,6 +172,10 @@ body{background:#f5f5f0;min-height:100vh}
 .menu-tab.active{background:#f0f0f0;color:#111;font-weight:600;border-color:#999}
 .item-edit-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #f5f5f5;flex-wrap:wrap}
 .item-edit-row:last-child{border:none}
+.dnd-handle{cursor:grab;font-size:16px;color:#ccc;padding:0 4px;user-select:none;flex-shrink:0}
+.dnd-handle:active{cursor:grabbing}
+.dnd-dragging{opacity:0.35!important;transform:scale(0.97)}
+.dnd-over{outline:2.5px dashed #1D9E75!important;outline-offset:-2px;background:#f0faf6!important;border-radius:8px}
 .edit-mini{padding:5px 8px;border-radius:6px;border:1px solid #ddd;background:#f8f8f6;color:#111;font-size:12px}
 .cat-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:#f5f5f0;border:1px solid #ddd;font-size:13px;color:#111;margin:4px}
 .cat-chip-btn{background:transparent;border:none;cursor:pointer;color:#999;font-size:14px;line-height:1;padding:0}
@@ -260,7 +264,6 @@ body{background:#f5f5f0;min-height:100vh}
 </div>
 
 <div class="screen" id="screen-ventas">
-  <div id="ventasFiltroBar" style="margin-bottom:4px"></div>
   <div class="metric-grid" id="ventasMetrics"></div>
   <div id="ventasPeriodsWrap" style="display:none"></div>
   <div class="card" id="ventasCardSimple">
@@ -270,6 +273,7 @@ body{background:#f5f5f0;min-height:100vh}
       <tbody id="ventasTbody"></tbody></table>
     </div>
   </div>
+  <div id="ventasFiltroBar" style="margin-top:12px"></div>
 </div>
 
 <div class="screen" id="screen-gastos">
@@ -290,13 +294,13 @@ body{background:#f5f5f0;min-height:100vh}
     </div>
     <button class="btn-green" onclick="addGasto()">Agregar gasto</button>
   </div>
-  <div id="gastosCalContainer"></div>
   <div id="gastosPeriodsWrap" style="display:none"></div>
   <div class="card" id="gastosCardSimple">
     <div class="section-title" id="gastosTituloCard">Gastos del día</div>
     <table class="tbl"><thead><tr><th>Fecha</th><th>Hora</th><th>Descripcion</th><th>Origen</th><th>Monto</th></tr></thead>
     <tbody id="gastosTbody"></tbody></table>
   </div>
+  <div id="gastosCalContainer" style="margin-top:12px"></div>
 </div>
 
 <div class="screen" id="screen-cierre">
@@ -769,6 +773,28 @@ let calGastosMes=new Date().toISOString().slice(0,7);
 let calGastosSelDia=localISO(); // arranca mostrando hoy
 let _ventasDisplayPool=[];
 let _ventasSelIdx=-1; // índice seleccionado en la tabla de ventas (para navegación por flechas)
+
+// ── DRAG & DROP para reordenar listas ──
+let _dnd={src:null,arr:null,idx:-1};
+function dndStart(e,arrName,idx){_dnd={src:e.currentTarget,arr:arrName,idx:idx};e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(idx));setTimeout(function(){if(_dnd.src)_dnd.src.classList.add('dnd-dragging');},0);}
+function dndOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';}
+function dndEnter(e){e.currentTarget.classList.add('dnd-over');}
+function dndLeave(e){e.currentTarget.classList.remove('dnd-over');}
+function dndEnd(e){document.querySelectorAll('.dnd-over,.dnd-dragging').forEach(function(el){el.classList.remove('dnd-over','dnd-dragging');});_dnd={src:null,arr:null,idx:-1};}
+function dndDrop(e,arrName,toIdx){
+  e.preventDefault();e.stopPropagation();
+  document.querySelectorAll('.dnd-over,.dnd-dragging').forEach(function(el){el.classList.remove('dnd-over','dnd-dragging');});
+  if(_dnd.arr!==arrName||_dnd.idx===toIdx){_dnd={src:null,arr:null,idx:-1};return;}
+  const fromIdx=_dnd.idx;_dnd={src:null,arr:null,idx:-1};
+  const arr=arrName==='menu'?menu:arrName==='mesas'?mesas:arrName==='users'?users:null;
+  if(!arr)return;
+  const item=arr.splice(fromIdx,1)[0];
+  arr.splice(fromIdx<toIdx?toIdx-1:toIdx,0,item);
+  saveLS();
+  if(arrName==='menu')renderMenuAdmin();
+  else if(arrName==='mesas')renderSalon();
+  else if(arrName==='users')renderUsers();
+}
 let _lastCierreReportHTML=''; // para reimprimir el último reporte de cierre
 // caja inicial: se usa localStorage con fecha del día para no repetir en recargas
 let menuAdminCatFiltro=null;
@@ -895,11 +921,13 @@ function renderSalon(){
   const grid=document.getElementById("salonGrid");
   const isAdmin=activeUser&&activeUser.role==="admin";
   grid.style.cssText='';
-  let html=mesas.map(function(m){
+  let html=mesas.map(function(m,idx){
     const ord=orders[m];const occ=ord&&ord.items.length>0;
     const sub=occ?ord.items.reduce(function(a,b){return a+b.price*b.qty;},0):0;
     const nm=m.replace(/'/g,"\\'");
-    return'<div class="mesa'+(occ?' ocupada':'')+'" onclick="openMesa(\''+nm+'\')" style="cursor:pointer">'+
+    const drag=isAdmin?' draggable="true" ondragstart="dndStart(event,\'mesas\','+idx+')" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,\'mesas\','+idx+')" ondragend="dndEnd(event)"':'';
+    return'<div class="mesa'+(occ?' ocupada':'')+'"'+drag+' onclick="openMesa(\''+nm+'\')" style="cursor:pointer">'+
+      (isAdmin?'<div style="font-size:11px;color:#ccc;text-align:right;margin-bottom:-6px;margin-top:-4px;user-select:none">⠿</div>':'')+
       '<div style="font-size:38px;font-weight:900;line-height:1.1;color:'+(occ?'#E24B4A':'#1D9E75')+'">'+getMesaNum(m)+'</div>'+
       '<div class="mesa-nombre" style="margin-top:4px">'+m+'</div>'+
       '<div class="mesa-info">'+(occ?fmt(sub)+' &middot; '+ord.items.reduce(function(a,b){return a+b.qty;},0)+' items':'Libre')+'</div>'+
@@ -1307,6 +1335,8 @@ let sv2Sel={};       // {itemId: qty seleccionada para cobro actual}
 let sv2Method=null;  // método de pago actual
 let sv2Recibido=0;   // monto recibido (efectivo)
 let sv2EfBilletes={};// denominaciones ingresadas para cobro en efectivo (split)
+let sv2ModoUSD=false;
+let sv2DolaresAmt='';
 let _sv2OrigCerrarTicket=null;// cerrarTicket original antes de cualquier override del split
 
 function showSplitV2Modal(){
@@ -1437,9 +1467,11 @@ function sv2Finalizar(cobradoPor){
   const{sub,servMonto,tax,total}=sv2GetTotals();
   const now=new Date();
   const hm=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  const recibido=sv2Method==='Efectivo'?sv2TotalBilletes():total;
+  const recibido=sv2Method==='Efectivo'?sv2TotalEfRecibido():total;
   const vuelto=sv2Method==='Efectivo'?Math.max(0,recibido-total):0;
-  const vueltoDesgSplit=sv2Method==='Efectivo'&&vuelto>0?calcVueltoDesglose(vuelto):[];
+  const vueltoDesgSplit=sv2Method==='Efectivo'&&!sv2ModoUSD&&vuelto>0?calcVueltoDesglose(vuelto):[];
+  const _sv2DolRec=sv2ModoUSD?parseFloat(sv2DolaresAmt)||0:0;
+  const _sv2TcUsado=sv2ModoUSD?tipoCambio:0;
   // Items de este cobro
   const itemsCobro=ord.items.filter(function(it){return(sv2Sel[it.id]||0)>0;}).map(function(it){
     return Object.assign({},it,{qty:sv2Sel[it.id]});
@@ -1450,9 +1482,11 @@ function sv2Finalizar(cobradoPor){
     mesa:activeMesa,items:itemsCobro,
     metodo:sv2Method,cobradoPor:cobradoPor||'—',
     sub,descMonto:0,servMonto,tax,total,
-    recibido,vuelto,billetesRecibidos:sv2Method==='Efectivo'?Object.assign({},sv2EfBilletes):{},vueltoDesg:vueltoDesgSplit,pagos:null
+    recibido,vuelto,billetesRecibidos:sv2Method==='Efectivo'?Object.assign({},sv2EfBilletes):{},
+    vueltoDesg:vueltoDesgSplit,dolaresRecibidos:_sv2DolRec,tipoCambioUsado:_sv2TcUsado,pagos:null
   });
-  if(sv2Method==='Efectivo'){for(const[bv,bc]of Object.entries(sv2EfBilletes))cajaBilletes[bv]=(cajaBilletes[bv]||0)+bc;for(const vd of vueltoDesgSplit)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
+  if(sv2Method==='Efectivo'&&!sv2ModoUSD){for(const[bv,bc]of Object.entries(sv2EfBilletes))cajaBilletes[bv]=(cajaBilletes[bv]||0)+bc;for(const vd of vueltoDesgSplit)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
+  sv2ModoUSD=false;sv2DolaresAmt='';
   // Quitar los ítems pagados de la mesa
   Object.keys(sv2Sel).forEach(function(id){
     const idx=ord.items.findIndex(function(i){return i.id===parseInt(id);});
@@ -1506,52 +1540,105 @@ function sv2Finalizar(cobradoPor){
 /* ── SPLIT V2: MODAL DE EFECTIVO (BILLETES Y MONEDAS) ── */
 function sv2TotalBilletes(){return Object.entries(sv2EfBilletes).reduce(function(a,e){return a+parseInt(e[0])*e[1];},0);}
 
+function sv2TotalEfRecibido(){return sv2ModoUSD?Math.round((parseFloat(sv2DolaresAmt)||0)*tipoCambio):sv2TotalBilletes();}
+function sv2SetModoUSD(usd,cp){sv2ModoUSD=usd;if(usd){sv2EfBilletes={};}else{sv2DolaresAmt='';}showSv2EfModal(cp);}
+function sv2SetDolarAmt(val,cp){
+  sv2DolaresAmt=val;
+  const{total}=sv2GetTotals();
+  const en=Math.round((parseFloat(val)||0)*tipoCambio);
+  const v=en-total;
+  const rv=document.getElementById('sv2-rec-val');const vv=document.getElementById('sv2-vue-val');const vl=document.getElementById('sv2-vue-lbl');const cb=document.getElementById('sv2-confirm-btn');
+  if(rv)rv.textContent=en>0?fmt(en):'—';
+  if(vv){if(en>0&&v===0){vv.textContent='Exacto';vv.className='totbox-val verde';}else if(v>0){vv.textContent=fmt(v);vv.className='totbox-val verde';}else if(v<0&&en>0){vv.textContent='Falta '+fmt(Math.abs(v));vv.className='totbox-val rojo';}else{vv.textContent='—';vv.className='totbox-val azul';}}
+  if(vl)vl.textContent=v<0?'Falta':'Vuelto';
+  if(cb){const ok=en>=total&&en>0;cb.disabled=!ok;cb.style.background=ok?'':'#bbb';cb.textContent=ok?'✓ Confirmar cobro':'Monto insuficiente';}
+}
+
 function showSv2EfModal(cp){
   const old=document.getElementById('sv2EfModal');if(old)old.remove();
   const{total}=sv2GetTotals();
-  const recibido=sv2TotalBilletes();
-  const vuelto=recibido-total;
-  const billetesHtml=DENOMINACIONES.map(function(d){
-    const cnt=sv2EfBilletes[d.val]||0;const esB=d.val>=1000;
-    return'<div class="billete-btn" onclick="sv2AddBillete('+d.val+',\''+cp+'\')" style="background:'+(esB?'#FAEEDA':'#E6F1FB')+';border-color:'+(esB?'#EF9F27':'#85B7EB')+'">'+
-      (cnt>0?'<div class="billete-count">'+cnt+'</div>':'')+
-      '<div class="billete-val" style="color:'+(esB?'#633806':'#0C447C')+'">'+fmt(d.val)+'</div>'+
-      '<div class="billete-tipo" style="color:'+(esB?'#854F0B':'#185FA5')+'">'+d.lbl+'</div>'+
-    '</div>';
-  }).join('');
-  const desgloseRows=DENOMINACIONES.filter(function(d){return sv2EfBilletes[d.val]>0;}).map(function(d){
-    return'<div class="desglose-row"><span style="flex:1;color:#666">'+fmt(d.val)+'</span><span style="font-weight:600;color:#111;min-width:30px;text-align:center">'+sv2EfBilletes[d.val]+'&times;</span><span style="color:#666;min-width:65px;text-align:right">'+fmt(d.val*sv2EfBilletes[d.val])+'</span><button class="desglose-x" onclick="sv2RemBillete('+d.val+',\''+cp+'\')">&times;</button></div>';
-  }).join('');
-  let vueltoTxt='&mdash;',vueltoClass='azul';
-  if(recibido>0&&vuelto===0)vueltoTxt='Exacto';
-  else if(vuelto>0){vueltoTxt=fmt(vuelto);vueltoClass='verde';}
-  else if(vuelto<0){vueltoTxt='Falta '+fmt(Math.abs(vuelto));vueltoClass='rojo';}
-  const canConfirm=recibido>=total&&recibido>0;
+  const toggleHtml='<div style="display:flex;gap:4px;background:#f0f0ec;border-radius:10px;padding:4px;margin-bottom:14px">'
+    +'<button onclick="sv2SetModoUSD(false,\''+cp+'\')" style="flex:1;padding:7px;border-radius:7px;border:none;background:'+(!sv2ModoUSD?'#fff':'transparent')+';font-size:13px;font-weight:600;cursor:pointer;color:'+(!sv2ModoUSD?'#1D9E75':'#888')+';box-shadow:'+(!sv2ModoUSD?'0 1px 4px rgba(0,0,0,.1)':'none')+'">&#8353; Colones</button>'
+    +'<button onclick="sv2SetModoUSD(true,\''+cp+'\')" style="flex:1;padding:7px;border-radius:7px;border:none;background:'+(sv2ModoUSD?'#fff':'transparent')+';font-size:13px;font-weight:600;cursor:pointer;color:'+(sv2ModoUSD?'#1D9E75':'#888')+';box-shadow:'+(sv2ModoUSD?'0 1px 4px rgba(0,0,0,.1)':'none')+'">$ D&#243;lares</button>'
+    +'</div>';
   const div=document.createElement('div');div.className='overlay-bg';div.id='sv2EfModal';div.style.zIndex='300';
-  div.innerHTML='<div class="ef-modal">'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'+
-      '<div style="font-size:15px;font-weight:600;color:#111">💵 Efectivo &mdash; Cobro parcial</div>'+
-      '<button class="btn-sec" style="width:auto;padding:6px 14px" onclick="closeSv2EfModal()">&larr; Atrás</button>'+
-    '</div>'+
-    '<div class="totbar">'+
-      '<div class="totbox"><div class="totbox-lbl">A cobrar</div><div class="totbox-val azul">'+fmt(total)+'</div></div>'+
-      '<div class="totbox"><div class="totbox-lbl">Recibido</div><div class="totbox-val verde">'+(recibido?fmt(recibido):'&mdash;')+'</div></div>'+
-      '<div class="totbox"><div class="totbox-lbl">'+(vuelto<0?'Falta':'Vuelto')+'</div><div class="totbox-val '+vueltoClass+'">'+vueltoTxt+'</div></div>'+
-    '</div>'+
-    '<div style="font-size:11px;font-weight:600;color:#999;margin-bottom:8px">Toca para sumar &mdash; cada toque agrega una unidad</div>'+
-    '<div class="billete-grid">'+billetesHtml+'</div>'+
-    (desgloseRows?'<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:4px">Desglose recibido</div><div class="desglose">'+desgloseRows+'</div>':'')+
-    '<div style="display:flex;gap:8px;margin-top:8px">'+
-      '<button class="btn-sec" style="width:auto;padding:8px 16px" onclick="sv2LimpiarBilletes(\''+cp+'\')">Limpiar</button>'+
-      '<button class="btn-cobrar" style="margin:0;'+(canConfirm?'':'background:#bbb;cursor:default')+'" '+(canConfirm?'':'disabled')+' onclick="sv2Finalizar(\''+cp+'\')">'+(canConfirm?'&#10003; Confirmar cobro':'Monto insuficiente')+'</button>'+
-    '</div>'+
-  '</div>';
+  let bodyHtml;
+  if(sv2ModoUSD){
+    const dolarMonto=parseFloat(sv2DolaresAmt)||0;
+    const enColones=Math.round(dolarMonto*tipoCambio);
+    const vuelto=enColones-total;
+    let vueltoTxt='&mdash;',vueltoClass='azul',vueltolbl='Vuelto';
+    if(dolarMonto>0&&vuelto===0){vueltoTxt='Exacto';vueltoClass='verde';}
+    else if(vuelto>0){vueltoTxt=fmt(vuelto);vueltoClass='verde';}
+    else if(vuelto<0&&dolarMonto>0){vueltoTxt='Falta '+fmt(Math.abs(vuelto));vueltoClass='rojo';vueltolbl='Falta';}
+    const canConfirm=dolarMonto>0&&enColones>=total;
+    const esAdmin=activeUser&&activeUser.role==='admin';
+    const tcField=esAdmin
+      ?'<input type="number" value="'+tipoCambio+'" min="1" oninput="setTipoCambioModal(this.value,\''+cp+'\')" style="width:80px;padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:14px;font-weight:700;color:#111;outline:none">'
+      :'<span style="font-size:14px;font-weight:700;color:#111">'+tipoCambio+'</span>';
+    bodyHtml='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;background:#f8f8f6;padding:8px 10px;border-radius:8px">'
+      +'<span style="font-size:12px;color:#666;font-weight:600">Tipo de cambio:</span>'
+      +'<span style="font-size:12px;color:#666">&#8353;</span>'+tcField
+      +'<span style="font-size:12px;color:#666">por $1</span>'
+      +(esAdmin?'':'<span style="font-size:10px;color:#aaa;margin-left:4px">(solo admin)</span>')
+      +'</div>'
+      +'<div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px">Monto recibido en dólares</div>'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'
+      +'<span style="font-size:28px;color:#3B6D11;font-weight:700">$</span>'
+      +'<input type="number" id="sv2DolarInput" value="'+sv2DolaresAmt+'" min="0" step="0.01" placeholder="0.00" oninput="sv2SetDolarAmt(this.value,\''+cp+'\')" style="flex:1;padding:12px 14px;border-radius:10px;border:2px solid #97C459;font-size:28px;font-weight:700;color:#3B6D11;outline:none;background:#f8fff5">'
+      +'<button onclick="sv2DolaresAmt=\'\';showSv2EfModal(\''+cp+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid #ddd;background:transparent;cursor:pointer;font-size:13px;color:#999">&#x2715;</button>'
+      +'</div>'
+      +(dolarMonto>0?'<div style="text-align:center;font-size:13px;color:#555;margin-bottom:14px;background:#f0faf6;padding:8px;border-radius:8px">$'+dolarMonto.toFixed(2)+' &times; &#8353;'+tipoCambio+' = <strong style="color:#085041;font-size:15px">'+fmt(enColones)+'</strong></div>':'<div style="height:8px"></div>')
+      +'<div class="totbar">'
+      +'<div class="totbox"><div class="totbox-lbl">A cobrar</div><div class="totbox-val azul">'+fmt(total)+'</div></div>'
+      +'<div class="totbox"><div class="totbox-lbl">Recibido</div><div class="totbox-val verde" id="sv2-rec-val">'+(dolarMonto>0?fmt(enColones):'&mdash;')+'</div></div>'
+      +'<div class="totbox"><div class="totbox-lbl" id="sv2-vue-lbl">'+vueltolbl+'</div><div class="totbox-val '+vueltoClass+'" id="sv2-vue-val">'+vueltoTxt+'</div></div>'
+      +'</div>'
+      +'<button id="sv2-confirm-btn" class="btn-cobrar" style="margin:0;'+(!canConfirm?'background:#bbb;cursor:default;':'')+'" '+(canConfirm?'':'disabled')+' onclick="sv2Finalizar(\''+cp+'\')">'+(canConfirm?'&#10003; Confirmar cobro':'Monto insuficiente')+'</button>';
+  } else {
+    const recibido=sv2TotalBilletes();
+    const vuelto=recibido-total;
+    const billetesHtml=DENOMINACIONES.map(function(d){
+      const cnt=sv2EfBilletes[d.val]||0;const esB=d.val>=1000;
+      return'<div class="billete-btn" onclick="sv2AddBillete('+d.val+',\''+cp+'\')" style="background:'+(esB?'#FAEEDA':'#E6F1FB')+';border-color:'+(esB?'#EF9F27':'#85B7EB')+'">'+
+        (cnt>0?'<div class="billete-count">'+cnt+'</div>':'')+
+        '<div class="billete-val" style="color:'+(esB?'#633806':'#0C447C')+'">'+fmt(d.val)+'</div>'+
+        '<div class="billete-tipo" style="color:'+(esB?'#854F0B':'#185FA5')+'">'+d.lbl+'</div>'+
+      '</div>';
+    }).join('');
+    const desgloseRows=DENOMINACIONES.filter(function(d){return sv2EfBilletes[d.val]>0;}).map(function(d){
+      return'<div class="desglose-row"><span style="flex:1;color:#666">'+fmt(d.val)+'</span><span style="font-weight:600;color:#111;min-width:30px;text-align:center">'+sv2EfBilletes[d.val]+'&times;</span><span style="color:#666;min-width:65px;text-align:right">'+fmt(d.val*sv2EfBilletes[d.val])+'</span><button class="desglose-x" onclick="sv2RemBillete('+d.val+',\''+cp+'\')">&times;</button></div>';
+    }).join('');
+    let vueltoTxt='&mdash;',vueltoClass='azul';
+    if(recibido>0&&vuelto===0)vueltoTxt='Exacto';
+    else if(vuelto>0){vueltoTxt=fmt(vuelto);vueltoClass='verde';}
+    else if(vuelto<0){vueltoTxt='Falta '+fmt(Math.abs(vuelto));vueltoClass='rojo';}
+    const canConfirm=recibido>=total&&recibido>0;
+    bodyHtml='<div style="font-size:11px;font-weight:600;color:#999;margin-bottom:8px">Toca para sumar &mdash; cada toque agrega una unidad</div>'
+      +'<div class="billete-grid">'+billetesHtml+'</div>'
+      +(desgloseRows?'<div style="font-size:11px;font-weight:600;color:#666;margin-bottom:4px">Desglose recibido</div><div class="desglose">'+desgloseRows+'</div>':'')
+      +'<div class="totbar">'
+      +'<div class="totbox"><div class="totbox-lbl">A cobrar</div><div class="totbox-val azul">'+fmt(total)+'</div></div>'
+      +'<div class="totbox"><div class="totbox-lbl">Recibido</div><div class="totbox-val verde">'+(recibido?fmt(recibido):'&mdash;')+'</div></div>'
+      +'<div class="totbox"><div class="totbox-lbl">'+(vuelto<0?'Falta':'Vuelto')+'</div><div class="totbox-val '+vueltoClass+'">'+vueltoTxt+'</div></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:8px">'
+      +'<button class="btn-sec" style="width:auto;padding:8px 16px" onclick="sv2LimpiarBilletes(\''+cp+'\')">Limpiar</button>'
+      +'<button class="btn-cobrar" style="margin:0;'+(canConfirm?'':'background:#bbb;cursor:default')+'" '+(canConfirm?'':'disabled')+' onclick="sv2Finalizar(\''+cp+'\')">'+(canConfirm?'&#10003; Confirmar cobro':'Monto insuficiente')+'</button>'
+      +'</div>';
+  }
+  div.innerHTML='<div class="ef-modal">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+    +'<div style="font-size:15px;font-weight:600;color:#111">💵 Efectivo &mdash; Cobro parcial</div>'
+    +'<button class="btn-sec" style="width:auto;padding:6px 14px" onclick="closeSv2EfModal()">&larr; Atrás</button>'
+    +'</div>'+toggleHtml+bodyHtml+'</div>';
   document.body.appendChild(div);
+  if(sv2ModoUSD){setTimeout(function(){const inp=document.getElementById('sv2DolarInput');if(inp){inp.focus();inp.select();}},80);}
 }
 function sv2AddBillete(v,cp){sv2EfBilletes[v]=(sv2EfBilletes[v]||0)+1;showSv2EfModal(cp);}
 function sv2RemBillete(v,cp){if(sv2EfBilletes[v]>0)sv2EfBilletes[v]--;if(!sv2EfBilletes[v])delete sv2EfBilletes[v];showSv2EfModal(cp);}
 function sv2LimpiarBilletes(cp){sv2EfBilletes={};showSv2EfModal(cp);}
-function closeSv2EfModal(){const m=document.getElementById('sv2EfModal');if(m)m.remove();}
+function closeSv2EfModal(){const m=document.getElementById('sv2EfModal');if(m)m.remove();sv2ModoUSD=false;sv2DolaresAmt='';}
 
 /* ── DIVIDIR CUENTA (por platillos) ── */
 const GRP_BG  =['#E1F5EE','#E6F1FB','#FAEEDA','#EEEDFE','#FBEAF0'];
@@ -2644,61 +2731,72 @@ function guardarCajaInicial(afterCierre){
 }
 function reprintLastCierre(){
   if(!_lastCierreReportHTML){toast('No hay cierre reciente para reimprimir');return;}
-  const w=window.open('','_blank','width=500,height=800');
-  if(!w){toast('El navegador bloqueó la ventana emergente');return;}
-  w.document.write(_lastCierreReportHTML);
-  w.document.close();w.focus();
-  setTimeout(function(){w.print();},500);
+  _abrirImpresion(_lastCierreReportHTML,'Cierre');
 }
 function printCierreReport(c){
-  const w=window.open('','_blank','width=500,height=800');
-  if(!w)return;
   const fmt2=n=>new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',minimumFractionDigits:0}).format(n);
-  const row=(l,r,bold)=>`<div style="display:flex;justify-content:space-between;padding:3px 0;${bold?'font-weight:700;border-top:1px solid #000;margin-top:4px':''}"><span>${l}</span><span>${r}</span></div>`;
-  let gasHtml='';
-  if(c.gastosList&&c.gastosList.length){
-    gasHtml='<div style="margin-top:8px;font-size:11px;color:#555;font-weight:600">GASTOS DEL DIA:</div>';
-    gasHtml+=c.gastosList.map(g=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span>${g.desc} (${g.tipo})</span><span>${fmt2(g.monto)}</span></div>`).join('');
-  }
-  const _cierreHTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-    @page{size:80mm auto;margin:3mm}
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Courier New',monospace;font-size:14px;padding:6px 8px;width:74mm;color:#000;line-height:1.7}
-    h2{text-align:center;font-size:17px;margin-bottom:4px;font-weight:800}
-    .sub{text-align:center;font-size:12px;color:#333;margin-bottom:6px}
-    hr{border:none;border-top:1px dashed #555;margin:6px 0}
-    hr.solid{border-top:2px solid #000}
-  </style></head><body>
-    <h2>&#9733; CIERRE DEL DIA &#9733;</h2>
-    <div class="sub">${c.fecha}</div>
-    <hr>
-    ${row('Ordenes atendidas:',c.numVentas)}
-    <hr>
-    ${row('Ventas efectivo:',fmt2(c.ef||0))}
-    ${c.tc?row('Ventas tarjeta:',fmt2(c.tc)):''}
-    ${c.si?row('Ventas SINPE:',fmt2(c.si)):''}
-    ${row('TOTAL VENTAS:',fmt2(c.totalVentas),true)}
-    <hr>
-    ${c.gastoCaja?row('Gastos de caja:',' - '+fmt2(c.gastoCaja)):''}
-    ${row('Efectivo de mas:',fmt2(c.efNeto!==undefined?c.efNeto:(c.ef||0)-(c.gastoCaja||0)),true)}
-    ${c.cajainicial?row('Caja inicial:',fmt2(c.cajainicial)):''}
-    ${c.cajainicial?row('Efectivo final en caja:',fmt2(c.efEnCaja!==undefined?c.efEnCaja:(c.cajainicial||0)+(c.ef||0)-(c.gastoCaja||0)),true):''}
-    ${c.gastoFuerte?row('Gastos externos (fuerte):',fmt2(c.gastoFuerte)):''}
-    ${c.gastoSinpe?row('Gastos externos (SINPE):',fmt2(c.gastoSinpe)):''}
-    ${c.gastoTransf?row('Gastos externos (transf):',fmt2(c.gastoTransf)):''}
-    ${gasHtml}
-    <hr>
-    ${row('Ef. de mas:',fmt2(c.efNeto!==undefined?c.efNeto:(c.ef||0)-(c.gastoCaja||0)))}
-    ${c.tc?row('Tarjeta:',fmt2(c.tc)):''}
-    ${c.si?row('SINPE:',fmt2(c.si)):''}
-    <hr class="solid">
-    <div style="font-weight:800;text-align:center;font-size:16px;padding:4px 0">UTILIDAD DEL DIA: ${fmt2(c.utilidad||0)}</div>
-    <div style="text-align:center;font-size:12px;color:#555;margin-top:8px">* * * FIN DEL CIERRE * * *</div>
-  </body></html>`;
-  _lastCierreReportHTML=_cierreHTML;
-  w.document.write(_cierreHTML);
-  w.document.close();w.focus();
-  setTimeout(()=>{w.print();},500);
+  const row=(l,r,bold)=>`<div class="${bold?'ticket-bold':'ticket-row'}"><span>${l}</span><span>${r}</span></div>`;
+  // ── Calcular totales ──
+  const gastoCaja=c.gastoCaja||0;
+  const gastoExt=(c.gastoFuerte||0)+(c.gastoSinpe||0)+(c.gastoTransf||0);
+  const totalVentas=c.totalVentas||0;
+  const ef=c.ef||0;const tc=c.tc||0;const si=c.si||0;
+  // Utilidad = ventas - gastos de CAJA solamente (externos son solo registro)
+  const utilidad=totalVentas-gastoCaja;
+  const sumaCobrado=ef+tc+si; // = totalVentas
+  const diferencia=sumaCobrado-utilidad; // en condiciones normales = gastoCaja
+  // ── Separar gastos externos vs caja ──
+  const gastosExt=(c.gastosList||[]).filter(g=>g.tipo!=='caja');
+  const gastosCaja=(c.gastosList||[]).filter(g=>g.tipo==='caja');
+  const tipoLabel=t=>t==='fuerte'?'C.Fuerte':t==='sinpe'?'SINPE':t==='transf'?'Transf':'';
+  const gastoRowExt=g=>`<div class="ticket-row" style="font-size:12px">`+
+    `<span>${g.desc} <span style="font-size:10px">[${tipoLabel(g.tipo)}]</span></span>`+
+    `<span>${fmt2(g.monto)}</span></div>`;
+  const gastoRowCaja=g=>`<div class="ticket-row" style="font-size:12px">`+
+    `<span>${g.desc}</span>`+
+    `<span>${fmt2(g.monto)}</span></div>`;
+  // ── Etiqueta diferencia ──
+  let difLabel;
+  if(diferencia===0){difLabel='&#10003; CUADRA EXACTO';}
+  else if(diferencia>0){difLabel='SOBRO: +'+fmt2(diferencia);}
+  else{difLabel='FALTA: '+fmt2(Math.abs(diferencia));}
+  const body=`
+    <div class="ticket-center" style="font-size:17px;font-weight:800;margin-bottom:2px">&#9733; CIERRE DEL DIA &#9733;</div>
+    <div class="ticket-center" style="font-size:13px">${c.fecha} &mdash; Turno ${c.turno||1}</div>
+    <div class="ticket-center" style="font-size:12px;margin-bottom:4px">${c.numVentas} orden${c.numVentas!==1?'es':''} atendida${c.numVentas!==1?'s':''}</div>
+    <hr class="ticket-hr-solid">
+
+    <div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">GASTOS EXTERNOS</div>
+    ${gastosExt.length?gastosExt.map(gastoRowExt).join(''):`<div class="ticket-row" style="font-size:12px"><span>Sin gastos externos</span><span>${fmt2(0)}</span></div>`}
+    ${gastoExt?`<hr class="ticket-hr-dash">${row('Total externos:',fmt2(gastoExt))}`:``}
+    <hr class="ticket-hr-solid">
+
+    <div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">GASTOS DE CAJA</div>
+    ${gastosCaja.length?gastosCaja.map(gastoRowCaja).join(''):`<div class="ticket-row" style="font-size:12px"><span>Sin gastos de caja</span><span>${fmt2(0)}</span></div>`}
+    ${gastoCaja?`<hr class="ticket-hr-dash">${row('Total gastos caja:',fmt2(gastoCaja))}`:``}
+    <hr class="ticket-hr-solid">
+
+    <div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">VENTAS DEL DIA</div>
+    ${row('Total ventas:',fmt2(totalVentas))}
+    ${gastoCaja?row('Gastos de caja:','- '+fmt2(gastoCaja)):''}
+    <hr class="ticket-hr-dash">
+    <div class="ticket-bold"><span>UTILIDAD:</span><span>${fmt2(utilidad)}</span></div>
+    <hr class="ticket-hr-solid">
+
+    <div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">METODO DE COBRO</div>
+    ${ef?row('Efectivo:',fmt2(ef)):''}
+    ${tc?row('Tarjeta:',fmt2(tc)):''}
+    ${si?row('SINPE:',fmt2(si)):''}
+    <hr class="ticket-hr-dash">
+    <div class="ticket-bold"><span>TOTAL COBRADO:</span><span>${fmt2(sumaCobrado)}</span></div>
+    <hr class="ticket-hr-solid">
+
+    <div class="ticket-center" style="font-weight:800;font-size:15px;padding:3px 0">${difLabel}</div>
+    <hr class="ticket-hr-solid">
+    <div class="ticket-center" style="font-size:12px;margin-top:5px">* * * FIN DEL CIERRE * * *</div>
+  `;
+  _lastCierreReportHTML=body;
+  _abrirImpresion(body,'Cierre');
 }
 
 /* ── MENU ADMIN ── */
@@ -2708,7 +2806,14 @@ function renderMenuAdmin(){
   if(fb){fb.innerHTML=`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="ctab${!menuAdminCatFiltro?" active":""}" onclick="setMenuAdminFiltro(null)">Todas (${menu.length})</button>${cats.map(c=>`<button class="ctab${menuAdminCatFiltro===c?" active":""}" onclick="setMenuAdminFiltro('${c.replace(/'/g,"\'")}')">${c} <span style="font-weight:400;opacity:.7">${menu.filter(i=>i.cat===c).length}</span></button>`).join("")}</div>`;}
   const list=document.getElementById("menuList");if(!list)return;
   const filtered=menuAdminCatFiltro?menu.filter(i=>i.cat===menuAdminCatFiltro):menu;
-  list.innerHTML=filtered.map(i=>`<div class="item-edit-row" id="itemrow-${i.id}"><span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-blue" onclick="startEditItem(${i.id})">✎ Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`).join("")||`<div class="empty">No hay platillos en esta categoría</div>`;
+  const canDrag=!menuAdminCatFiltro;
+  list.innerHTML=(filtered.map((i,k)=>{
+    const realIdx=menu.indexOf(i);
+    const drag=canDrag?` draggable="true" ondragstart="dndStart(event,'menu',${realIdx})" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,'menu',${realIdx})" ondragend="dndEnd(event)"`:'';
+    const handle=canDrag?`<span class="dnd-handle" title="Arrastrar para reordenar">⠿</span>`:'';
+    return`<div class="item-edit-row" id="itemrow-${i.id}"${drag}>${handle}<span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-blue" onclick="startEditItem(${i.id})">✎ Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`;
+  }).join(''))||`<div class="empty">No hay platillos en esta categoría</div>`;
+  if(!canDrag&&filtered.length)list.innerHTML+='<div style="font-size:11px;color:#aaa;padding:6px 4px">Selecciona "Todas" para poder reordenar arrastrando</div>';
 }
 function setMenuAdminFiltro(cat){menuAdminCatFiltro=cat;renderMenuAdmin();}
 function startEditItem(id){
@@ -2742,8 +2847,10 @@ function delCat(idx){const c=cats[idx];if(menu.some(i=>i.cat===c)){toast("No se 
 /* ── USUARIOS ── */
 function renderUsers(){
   const isAdmin=activeUser&&activeUser.role==="admin";
-  document.getElementById("userGrid").innerHTML=users.map(u=>`
-    <div class="user-card">
+  document.getElementById("userGrid").innerHTML=users.map((u,idx)=>`
+    <div class="user-card"${isAdmin?` draggable="true" ondragstart="dndStart(event,'users',${idx})" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,'users',${idx})" ondragend="dndEnd(event)"`:''}>`+
+    (isAdmin?`<div style="font-size:12px;color:#ccc;text-align:right;margin-bottom:4px;user-select:none">⠿</div>`:'')
+    +`
       <div class="avatar ${u.role==="admin"?"av-admin":"av-emp"}">${initials(u.name)}</div>
       <div style="font-size:14px;font-weight:600;color:#111">${u.name}</div>
       <div style="font-size:11px;color:#aaa;margin-top:2px">PIN: &#9679;&#9679;&#9679;&#9679;</div>
