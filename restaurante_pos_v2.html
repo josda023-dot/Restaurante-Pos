@@ -244,12 +244,6 @@ body{background:#f5f5f0;min-height:100vh}
 </div>
 
 <div id="app">
-<div id="modoPruebaBanner" style="display:none;background:#DC2626;color:#fff;text-align:center;font-size:13px;font-weight:800;padding:7px 12px;letter-spacing:.4px;position:sticky;top:0;z-index:200;animation:prueba-pulso 2s ease-in-out infinite">
-  🧪 MODO PRUEBA — Los datos NO se sincronizan con la otra computadora
-  <button onclick="limpiarDatosPrueba()" style="margin-left:14px;background:#fff;border:none;border-radius:6px;padding:3px 12px;font-size:11px;font-weight:700;color:#DC2626;cursor:pointer">🧹 Limpiar</button>
-  <button onclick="toggleModoPrueba()" style="margin-left:6px;background:rgba(0,0,0,0.25);border:none;border-radius:6px;padding:3px 12px;font-size:11px;font-weight:700;color:#fff;cursor:pointer">✕ Salir</button>
-</div>
-<style>@keyframes prueba-pulso{0%,100%{opacity:1}50%{opacity:.82}}</style>
 <div class="topnav">
   <h1>&#127799; Soda El Tucan</h1>
   <button class="navbtn active" onclick="goScreen('salon')" id="nav-salon">Salon</button>
@@ -260,7 +254,6 @@ body{background:#f5f5f0;min-height:100vh}
   <button class="navbtn" onclick="goScreen('usuarios')" id="nav-usuarios">Usuarios</button>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
     <span id="activeUserLabel" style="font-size:12px;color:#666;font-weight:500"></span>
-<button id="nav-prueba" onclick="toggleModoPrueba()" title="Activar/desactivar modo de pruebas" style="padding:5px 10px;border-radius:8px;border:1px solid #F59E0B;background:transparent;font-size:11px;cursor:pointer;color:#92400E;font-weight:600">🧪 Prueba</button>
     <button class="navbtn" onclick="doLogout()" style="color:#E24B4A;border-color:#EDBBBA">&#9211; Salir</button>
   </div>
 </div>
@@ -438,113 +431,8 @@ body{background:#f5f5f0;min-height:100vh}
 <script>
 const ALL_SCREENS=["salon","ventas","gastos","cierre","menu-admin","usuarios"];
 
-/* ── FIREBASE + TABLET MODE ── */
+/* ── TABLET MODE ── */
 const TABLET_MODE=new URLSearchParams(window.location.search).get('tablet')==='1';
-const FB_CONFIG={apiKey:"AIzaSyAW4J1KkZMdKfiJVka7s3PjymoyyykfINI",authDomain:"pos-tucan.firebaseapp.com",databaseURL:"https://pos-tucan-default-rtdb.firebaseio.com",projectId:"pos-tucan",storageBucket:"pos-tucan.firebasestorage.app",messagingSenderId:"271965578160",appId:"1:271965578160:web:5577bfe487ed2bf208ac75"};
-/* ── MODO PRUEBA — usa rutas Firebase separadas para no contaminar datos reales ── */
-const modoPrueba=localStorage.getItem('rpos_modoPrueba')==='1';
-function toggleModoPrueba(){
-  if(!activeUser||activeUser.role!=='admin'){toast('Solo disponible para administradores');return;}
-  if(!confirm(modoPrueba
-    ?'Salir del Modo Prueba y volver a produccion?\n\nLos datos de prueba quedan guardados aqui pero no se sincronizaran con la otra compu.'
-    :'Activar Modo Prueba?\n\nEn este modo las ordenes y ventas usan rutas separadas en Firebase y NO llegaran a la otra computadora.\n\nUtil para hacer pruebas sin afectar los datos reales.'))return;
-  localStorage.setItem('rpos_modoPrueba',modoPrueba?'0':'1');
-  location.reload();
-}
-function limpiarDatosPrueba(){
-  if(!modoPrueba){toast('Solo disponible en Modo Prueba');return;}
-  if(!confirm('Eliminar TODOS los datos de prueba de esta computadora?\n(ventas, gastos y cierres de prueba)\n\nEsta accion no se puede deshacer.'))return;
-  ventas=[];gastos=[];cierres=[];orders={};cajaBilletes={};cajainicial=0;
-  try{fbOrders.set({});}catch(e){}
-  try{fbVentas.set({});}catch(e){}
-  saveLS();renderSalon();renderCierre();
-  toast('🧹 Datos de prueba eliminados');
-}
-// ── FIREBASE — carga asíncrona, no bloquea la página ──
-let fbOrders={set:()=>{},on:()=>{},off:()=>{}};
-let fbVentas={set:()=>{},on:()=>{},off:()=>{}};
-let _fbVentasReady=false;
-let _fbInited=false;
-
-function _actualizarIndicadorFb(conectado){
-  const dot=document.getElementById('fb-dot');
-  const lbl=document.getElementById('fb-lbl');
-  if(dot)dot.style.background=conectado?'#1D9E75':'#F59E0B';
-  if(lbl)lbl.textContent=conectado?'Conectado':'Sin internet';
-}
-
-function _tryInitFb(){
-  if(typeof firebase==='undefined'||typeof firebase.database==='undefined')return;
-  if(_fbInited)return;
-  _fbInited=true;
-  try{
-    if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);
-    const _ordRef=modoPrueba?'pos_orders_TEST':'pos_orders';
-    const _venRef=modoPrueba?'pos_ventas_TEST':'pos_ventas';
-    fbOrders=firebase.database().ref(_ordRef);
-    fbOrders.on('value',function(snap){
-      const d=snap.val()||{};
-      Object.keys(d).forEach(function(m){if(d[m]&&Array.isArray(d[m].items))orders[m]=d[m];});
-      renderSalon();
-      if(activeMesa&&document.getElementById('mesaModal'))renderMesaModal();
-    });
-    fbVentas=firebase.database().ref(_venRef);
-    fbVentas.on('value',function(snap){
-      // Ignorar si estamos en medio de un cierre para evitar race condition
-      if(window._bloqueandoFBSync)return;
-      const d=snap.val()||{};
-      const remotas=Object.values(d);
-      if(remotas.length){
-        const hoy=localISO();
-        // Solo aceptar ventas del día actual para evitar que ventas de días anteriores reaparezcan
-        const remotasHoy=remotas.filter(function(v){return v.fecha===hoy;});
-        const localIds=new Set(ventas.map(function(v){return v.id;}));
-        remotasHoy.forEach(function(v){if(!localIds.has(v.id))ventas.push(v);});
-        ventas.sort(function(a,b){return a.id-b.id;});
-        const maxId=Math.max.apply(null,ventas.map(function(v){return v.id||0;}));
-        if(maxId>=nextVid)nextVid=maxId+1;
-        try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
-      }
-      _fbVentasReady=true;
-      const s=document.getElementById('screen-ventas');
-      if(s&&s.classList.contains('on'))renderVentas();
-    });
-    firebase.database().ref('.info/connected').on('value',function(snap){
-      _actualizarIndicadorFb(snap.val()===true);
-    });
-    console.log('Firebase conectado');
-  }catch(e){console.warn('Firebase error:',e.message);}
-}
-
-function _cargarFirebase(){
-  const s1=document.createElement('script');
-  s1.src='https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js';
-  s1.async=true;
-  s1.onerror=function(){console.warn('Firebase app no disponible (sin internet)');};
-  s1.onload=function(){
-    const s2=document.createElement('script');
-    s2.src='https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js';
-    s2.async=true;
-    s2.onload=function(){_tryInitFb();};
-    s2.onerror=function(){console.warn('Firebase database no disponible (sin internet)');};
-    document.head.appendChild(s2);
-  };
-  document.head.appendChild(s1);
-}
-
-// Eventos de conexión
-window.addEventListener('online',function(){
-  toast('🟢 Internet restaurado');
-  _actualizarIndicadorFb(false);
-  if(!_fbInited)_cargarFirebase();
-});
-window.addEventListener('offline',function(){
-  toast('🔴 Sin internet — funcionando en modo local');
-  _actualizarIndicadorFb(false);
-});
-
-// Cargar Firebase en segundo plano (no bloquea la página)
-_cargarFirebase();
 const SCREEN_LABELS={salon:"Salon",ventas:"Ventas",gastos:"Gastos",cierre:"Cierre","menu-admin":"Menu",usuarios:"Usuarios"};
 const DENOMINACIONES=[
   {val:20000,lbl:"Billete"},{val:10000,lbl:"Billete"},
@@ -915,7 +803,6 @@ function doLogout(){activeUser=null;loginPinStr="";pendingLoginId=null;document.
 function updateNav(){
   const ADMIN_ONLY_SCREENS=new Set(["menu-admin","usuarios"]);
   ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(!b)return;const isAdm=activeUser&&activeUser.role==="admin";const show=activeUser&&(isAdm||(activeUser.allowedScreens.includes(s)&&!ADMIN_ONLY_SCREENS.has(s)));b.style.display=show?"":"none";});
-  const bp=document.getElementById("nav-prueba");if(bp)bp.style.display=(activeUser&&activeUser.role==="admin")?"":"none";
 }
 
 /* ── NAVEGACION ── */
@@ -2904,11 +2791,6 @@ function hacerCierre(){
   };
   cierres.push(cierreData);
   ventas=[];gastos=[];cajaBilletes={};
-  // Bloquear el listener de Firebase durante el cierre para evitar que ventas
-  // antiguas se re-agreguen antes de que el clear se propague a todos los dispositivos
-  window._bloqueandoFBSync=true;
-  try{fbVentas.set({});}catch(e){}
-  setTimeout(function(){window._bloqueandoFBSync=false;},3000);
   calCierresSelDia=hoy;
   calCierresMes=calCierresSelDia.slice(0,7);
   saveLS();
@@ -2951,13 +2833,56 @@ function enviarNotifCierre(c,turno){
   const topic=(ticketConfig.ntfyTopic||'').trim();
   if(!topic)return;
   const nombre=ticketConfig.nombre||'POS';
-  const fmtN=function(n){return'₡'+Math.round(n||0).toLocaleString('es-CR');};
+  const f=function(n){return'₡'+Math.round(n||0).toLocaleString('es-CR');};
+  const ln=function(l,r){return l+(r!==undefined?'  '+r:'');};
+  const sep='─────────────────';
+  const gastoCaja=c.gastoCaja||0;
+  const gastoExt=(c.gastoFuerte||0)+(c.gastoSinpe||0)+(c.gastoTransf||0);
+  const totalVentas=c.totalVentas||0;
+  const ef=c.ef||0;const tc=c.tc||0;const si=c.si||0;
+  const utilidad=totalVentas-gastoCaja;
+  const efNeto=ef-gastoCaja;
+  const sumaNeta=efNeto+tc+si;
+  const diferencia=sumaNeta-utilidad;
+  const tipoLabel=function(t){return t==='fuerte'?'C.Fuerte':t==='sinpe'?'SINPE':t==='transf'?'Transf':'';};
+  const gastosExt=(c.gastosList||[]).filter(function(g){return g.tipo!=='caja';});
+  const gastosCaja=(c.gastosList||[]).filter(function(g){return g.tipo==='caja';});
+  let difLabel=diferencia===0?'✓ CUADRA EXACTO':diferencia>0?'SOBRÓ: +'+f(diferencia):'FALTA: '+f(Math.abs(diferencia));
+
   const lines=[
-    (c.numVentas||0)+' ventas | Total: '+fmtN(c.totalVentas),
-    'Ef: '+fmtN(c.ef)+'  TC: '+fmtN(c.tc)+'  SINPE: '+fmtN(c.si),
-    'Gastos caja: '+fmtN(c.gastoCaja),
-    'Utilidad: '+fmtN(c.utilidad),
-    'Hora: '+c.fecha
+    '★ CIERRE DEL DÍA ★',
+    c.fecha+' — Turno '+turno,
+    (c.numVentas||0)+' orden'+(c.numVentas!==1?'es':'')+' atendida'+(c.numVentas!==1?'s':''),
+    sep,
+    'GASTOS EXTERNOS',
+    ...(gastosExt.length?gastosExt.map(function(g){return ln('  '+g.desc+' ['+tipoLabel(g.tipo)+']',f(g.monto));}):['  Sin gastos externos']),
+    ...(gastoExt?[ln('Total externos:',f(gastoExt))]:[]),
+    sep,
+    'GASTOS DE CAJA',
+    ...(gastosCaja.length?gastosCaja.map(function(g){return ln('  '+g.desc,f(g.monto));}):['  Sin gastos de caja']),
+    ...(gastoCaja?[ln('Total gastos caja:',f(gastoCaja))]:[]),
+    sep,
+    'VENTAS DEL DÍA',
+    ln('Total ventas:',f(totalVentas)),
+    ...(gastoCaja?[ln('Gastos de caja:','- '+f(gastoCaja))]:[]),
+    ln('UTILIDAD:',f(utilidad)),
+    sep,
+    ...((c.cajainicial!==undefined&&c.cajainicial!==null)?[
+      'EFECTIVO EN CAJA',
+      ln('Caja inicial:',f(c.cajainicial||0)),
+      ...(ef?[ln('Ventas efectivo:',f(ef))]:[]),
+      ...(gastoCaja?[ln('Gastos de caja:','- '+f(gastoCaja))]:[]),
+      ln('Efectivo en caja:',f(c.efEnCaja!==undefined?c.efEnCaja:(c.cajainicial||0)+ef-gastoCaja)),
+      sep,
+    ]:[]),
+    'MÉTODO DE COBRO',
+    ...(efNeto?[ln('Efectivo (neto):',f(efNeto))]:[]),
+    ...(tc?[ln('Tarjeta:',f(tc))]:[]),
+    ...(si?[ln('SINPE:',f(si))]:[]),
+    ln('SUMA:',f(sumaNeta)),
+    sep,
+    difLabel,
+    '* * * FIN DEL CIERRE * * *'
   ].join('\n');
   const tituloC=encodeURIComponent(nombre+' — Cierre Turno '+turno);
   const urlC='https://ntfy.sh/'+encodeURIComponent(topic)+'?title='+tituloC+'&priority=3&tags=white_check_mark,moneybag';
@@ -3373,11 +3298,6 @@ function saveLS(){
     localStorage.setItem('rpos_mesas',JSON.stringify(mesas));
 
   }catch(e){}
-  try{fbOrders.set(orders);}catch(e){}
-  try{
-    const vo={};ventas.forEach(v=>{vo[v.id]=v;});
-    fbVentas.set(vo);
-  }catch(e){}
 }
 /* ── RESPALDO ── */
 function checkAutoRespaldo(){
@@ -3521,7 +3441,6 @@ function eliminarMesaAdmin(idx){
 function enviarACocina(){
   const ord=orders[activeMesa];
   if(!ord||!ord.items.length)return;
-  try{fbOrders.set(orders);}catch(e){}
   imprimirComanda(activeMesa,ord);
   toast('✅ Comanda enviada a cocina');
   closeMesa();
@@ -3568,7 +3487,6 @@ function toast(msg){const old=document.getElementById("_toast");if(old)old.remov
 /* ── INIT ── */
 try{
 loadLS();
-if(modoPrueba){const b=document.getElementById('modoPruebaBanner');if(b)b.style.display='block';}
 ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(b)b.style.display="none";});
 if(TABLET_MODE){
   document.querySelector('.topnav h1').innerHTML='&#127799; Soda El Tucan <span style="font-size:11px;background:#E1F5EE;color:#085041;padding:2px 10px;border-radius:20px;font-weight:600;margin-left:6px">&#128241; Modo Mesero</span>';
