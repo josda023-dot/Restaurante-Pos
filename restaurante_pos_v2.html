@@ -6,7 +6,7 @@
 <title>Soda El Tucan — POS</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
-body{background:#f5f5f0;min-height:100vh}
+body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
 .topnav{display:flex;align-items:center;gap:8px;padding:10px 16px;background:#fff;border-bottom:1px solid #e5e5e5;flex-wrap:wrap;position:sticky;top:0;z-index:10}
 .topnav h1{font-size:15px;font-weight:600;color:#111}
 .navbtn{padding:6px 12px;border-radius:8px;border:1px solid #ddd;background:transparent;font-size:12px;cursor:pointer;color:#666;transition:background .1s}
@@ -21,7 +21,7 @@ body{background:#f5f5f0;min-height:100vh}
 .mesa{border-radius:12px;padding:10px 8px;cursor:pointer;border:1px solid #ddd;background:#fff;transition:border-color .12s,box-shadow .12s;text-align:center;user-select:none;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;box-sizing:border-box}
 .mesa:hover:not(.edit-mode){border-color:#999;box-shadow:0 3px 10px rgba(0,0,0,.1)}
 .mesa.ocupada{background:#E1F5EE;border-color:#5DCAA5}
-.salon-canvas{position:relative;min-height:540px;width:100%;overflow-x:hidden;overflow-y:auto;border-radius:12px;border:1px solid #e8e8e8}
+.salon-canvas{position:relative;min-height:540px;overflow-x:auto;overflow-y:auto;border-radius:12px;border:1px solid #e8e8e8}
 .salon-canvas.edit-mode{background-color:#f7f7f5;background-image:radial-gradient(circle,#d0d0cc 1px,transparent 1px);background-size:24px 24px}
 .mesa-resize-handle{position:absolute;bottom:0;right:0;width:18px;height:18px;background:#1D9E75;border-radius:4px 0 10px 0;cursor:se-resize;opacity:.5;z-index:5}
 .mesa-resize-handle:hover{opacity:.9}
@@ -31,9 +31,6 @@ body{background:#f5f5f0;min-height:100vh}
 .mesa.edit-mode{overflow:visible !important}
 .salon-add-btn{position:absolute;bottom:16px;right:16px;width:110px;height:88px;border:2px dashed #1D9E75;background:#f0faf5;border-radius:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:3}
 .salon-edit-toggle{position:absolute;top:10px;right:10px;z-index:20}
-.mesa.alerta-warn{background:#FFF8E1;border-color:#F59E0B!important;border-width:2px!important}
-.mesa.alerta-critica{background:#FFF1F0;border-color:#E24B4A!important;border-width:2px!important;animation:pulso-alerta 1.4s ease-in-out infinite}
-@keyframes pulso-alerta{0%,100%{box-shadow:0 0 0 0 rgba(226,75,74,0.4)}50%{box-shadow:0 0 0 6px rgba(226,75,74,0)}}
 /* CALENDARIO */
 .cal-wrap{background:#f9fafb;border:1px solid #e8e8e8;border-radius:10px;padding:8px;margin-bottom:8px;max-width:320px}
 .cal-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
@@ -259,11 +256,10 @@ body{background:#f5f5f0;min-height:100vh}
 </div>
 
 <div class="screen on" id="screen-salon">
-  <div class="legend" id="salonLegend">
-    <div class="leg"><div class="leg-dot" style="background:#E1F5EE;border:1px solid #5DCAA5"></div>Con orden activa</div>
-    <div class="leg"><div class="leg-dot" style="background:#fff;border:1px solid #ddd"></div>Disponible</div>
+  <div id="salonEditBar" style="display:none;gap:6px;align-items:center;margin-bottom:6px"></div>
+  <div style="width:100%;overflow-x:auto">
+    <div class="salon-canvas" id="salonGrid"></div>
   </div>
-  <div class="salon-canvas" id="salonGrid"></div>
 </div>
 
 <div class="screen" id="screen-ventas">
@@ -664,7 +660,6 @@ let cajainicial=0;       // monto simple que se deja en caja para el siguiente d
 let activeUser=null,pendingLoginId=null,loginPinStr="",pinCobroCb=null,pinCobroStr="",pinCobroUserId=null;
 let splitGroups=[],splitAssignment={},nextGroupId=1;
 let splitEfQueue=[],splitEfBilletes={},splitEfCobradoPor=null;
-let mesasOpenedAt={};
 let _salonEditMode=false;
 let _mesaDragState=null,_mesaResizeState=null;
 let descuento={tipo:'pct',valor:0};
@@ -865,48 +860,39 @@ function getMesaIcon(m){
   return'🍽';
 }
 function getMesaNum(m){const match=m.match(/\d+/);return match?match[0]:m.charAt(0).toUpperCase();}
-function getMesaTimer(m){
-  if(!mesasOpenedAt[m])return'';
-  const mins=Math.floor((Date.now()-mesasOpenedAt[m])/60000);
-  if(mins<60)return mins+'min';
-  return Math.floor(mins/60)+'h '+(mins%60)+'min';
-}
-function getMesaAlertLevel(m){
-  if(!mesasOpenedAt[m])return 0;
-  const mins=Math.floor((Date.now()-mesasOpenedAt[m])/60000);
-  if(mins>=60)return 2;
-  if(mins>=45)return 1;
-  return 0;
-}
 function renderSalon(){
   const grid=document.getElementById("salonGrid");
   const isAdmin=activeUser&&activeUser.role==="admin";
   const editMode=_salonEditMode&&isAdmin;
-  const legend=document.getElementById('salonLegend');
-  if(legend)legend.style.display=editMode?'none':'flex';
   grid.className='salon-canvas'+(editMode?' edit-mode':'');
 
-  // Botón toggle edición (solo admin)
-  let html='';
-  if(isAdmin){
-    html+='<div style="position:absolute;top:10px;left:10px;z-index:20;display:flex;gap:6px;align-items:center">'+
-      '<button class="'+(editMode?'btn-green':'btn-sec')+'" style="font-size:12px;padding:6px 14px" onclick="toggleSalonEditMode()">'+
-        (editMode?'✓ Guardar':'✏️ Mesas')+
-      '</button>'+
-      (editMode?'<button class="btn-sec" style="font-size:12px;padding:6px 14px" onclick="agregarMesaEdit()">+ Nueva mesa</button>':'')+
-    '</div>';
+  // Barra de edición externa (fuera del canvas, nunca encima de las mesas)
+  const editBar=document.getElementById('salonEditBar');
+  if(editBar){
+    if(isAdmin){
+      editBar.style.display='flex';
+      editBar.style.width='fit-content';
+      editBar.innerHTML=
+        '<button class="'+(editMode?'btn-green':'btn-sec')+'" style="font-size:11px;padding:4px 10px" onclick="toggleSalonEditMode()">'+
+          (editMode?'✓ Guardar':'✏️ Mesas')+
+        '</button>'+
+        (editMode?'<button class="btn-sec" style="font-size:11px;padding:4px 10px" onclick="agregarMesaEdit()">+ Nueva mesa</button>':'');
+    } else {
+      editBar.style.display='none';
+      editBar.innerHTML='';
+    }
   }
 
-  // Calcular dimensiones mínimas del canvas según las mesas
-  // Ancho fijo del canvas = ancho disponible del contenedor (sin scroll horizontal)
-  grid.style.minWidth='';
-  grid.style.width='100%';
-  grid.style.maxWidth='100%';
-  grid.style.overflowX='hidden';
-  // Alto mínimo según las mesas más bajas
-  let maxY=300;
-  mesas.forEach(function(m){const ry=(m.y||0)+(m.h||100)+24;if(ry>maxY)maxY=ry;});
+  let html='';
+
+  // Dimensiones del canvas según las mesas
+  let maxY=300;let maxX=400;
+  mesas.forEach(function(m){
+    const ry=(m.y||0)+(m.h||100)+24;if(ry>maxY)maxY=ry;
+    const rx=(m.x||0)+(m.w||130)+16;if(rx>maxX)maxX=rx;
+  });
   grid.style.minHeight=Math.max(200,maxY)+'px';
+  grid.style.width=maxX+'px';
 
   html+=mesas.map(function(m,idx){
     const nombre=m.nombre||m;
@@ -918,8 +904,6 @@ function renderSalon(){
     const sub=occ?ord.items.reduce(function(a,b){return a+b.price*b.qty;},0):0;
     const nm=nombre.replace(/'/g,"\\'");
     const posStyle='position:absolute;left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+h+'px;border-radius:'+(isRound?'50%':'12px')+';';
-    const alertLvl=getMesaAlertLevel(nombre);
-    const alertCls=alertLvl===2?' alerta-critica':alertLvl===1?' alerta-warn':'';
 
     if(editMode){
       return'<div class="mesa'+(occ?' ocupada':'')+' edit-mode" style="'+posStyle+'cursor:move;" data-idx="'+idx+'" id="mesa-edit-'+idx+'">'+
@@ -933,7 +917,7 @@ function renderSalon(){
       '</div>';
     }else{
       const fontSize=Math.min(34,Math.floor(w*0.28))+'px';
-      return'<div class="mesa'+(occ?' ocupada':'')+alertCls+'" style="'+posStyle+'" onclick="openMesa(\''+nm+'\')">'+
+      return'<div class="mesa'+(occ?' ocupada':'')+'" style="'+posStyle+'" onclick="openMesa(\''+nm+'\')">'+
         '<div style="font-size:'+fontSize+';font-weight:900;line-height:1.1;color:'+(occ?'#E24B4A':'#1D9E75')+'">'+getMesaNum(nombre)+'</div>'+
         '<div class="mesa-nombre" style="margin-top:3px;font-size:'+(w<110?'11px':'13px')+'">'+nombre+'</div>'+
         '<div class="mesa-info">'+(occ?fmt(sub)+' &middot; '+ord.items.reduce(function(a,b){return a+b.qty;},0)+' items':'Libre')+'</div>'+
@@ -946,7 +930,6 @@ function renderSalon(){
   if(editMode)_initMesaEditEvents();
 }
 
-/* ── MODO EDICIÓN DE MESAS ── */
 function toggleSalonEditMode(){
   if(!activeUser||activeUser.role!=='admin'){toast('Solo el admin puede editar mesas');return;}
   _salonEditMode=!_salonEditMode;
@@ -981,7 +964,6 @@ function renameMesaEdit(idx){
   const nom=nuevo.trim();
   if(mesas.some(function(m,i){return i!==idx&&(m.nombre||m)===nom;})){toast('Ya existe una mesa con ese nombre');return;}
   if(orders[actual]){orders[nom]=orders[actual];delete orders[actual];}
-  if(mesasOpenedAt[actual]){mesasOpenedAt[nom]=mesasOpenedAt[actual];delete mesasOpenedAt[actual];}
   mesas[idx].nombre=nom;saveLS();renderSalon();toast('✓ Mesa renombrada');
 }
 function _cleanMesaEditEvents(){
@@ -1056,7 +1038,7 @@ function _initMesaEditEvents(){
   document.addEventListener('touchend',onUp);window._mesaTUpH=onUp;
 }
 function agregarMesaRapido(){agregarMesaEdit();}
-function openMesa(m){activeMesa=m;if(!orders[m])orders[m]={items:[]};if(!orders[m]||!orders[m].items||!orders[m].items.length)mesasOpenedAt[m]=Date.now();payMethod=null;efBilletes={};splitGroups=[];splitAssignment={};nextGroupId=1;descuento={tipo:'pct',valor:0};cobraItbis=ticketConfig.defaultItbis!==false;cobraServicio=ticketConfig.defaultServicio===true;renderMesaModal();}
+function openMesa(m){activeMesa=m;if(!orders[m])orders[m]={items:[]};payMethod=null;efBilletes={};splitGroups=[];splitAssignment={};nextGroupId=1;descuento={tipo:'pct',valor:0};cobraItbis=ticketConfig.defaultItbis!==false;cobraServicio=ticketConfig.defaultServicio===true;renderMesaModal();}
 function getTotal(){
   const ord=orders[activeMesa];
   const sub=ord.items.reduce((a,i)=>a+i.price*i.qty,0);
@@ -1872,7 +1854,6 @@ function mostrarTransferirMesa(){
 function ejecutarTransferirMesa(d){
   orders[d]=orders[activeMesa];
   orders[activeMesa]={items:[]};
-  if(mesasOpenedAt[activeMesa]){mesasOpenedAt[d]=mesasOpenedAt[activeMesa];delete mesasOpenedAt[activeMesa];}
   saveLS();
   const m=document.getElementById('transferModal');if(m)m.remove();
   closeMesa();
