@@ -300,7 +300,7 @@ body{background:#f5f5f0;min-height:100vh}
   <div id="gastosPeriodsWrap" style="display:none"></div>
   <div class="card" id="gastosCardSimple">
     <div class="section-title" id="gastosTituloCard">Gastos del día</div>
-    <table class="tbl"><thead><tr><th>Fecha</th><th>Hora</th><th>Descripcion</th><th>Origen</th><th>Monto</th></tr></thead>
+    <table class="tbl" id="gastosTbl"><thead><tr><th>Fecha</th><th>Hora</th><th>Descripcion</th><th>Origen</th><th>Monto</th><th id="gastosTh-acc"></th></tr></thead>
     <tbody id="gastosTbody"></tbody></table>
   </div>
   <div id="gastosCalContainer" style="margin-top:12px"></div>
@@ -626,7 +626,33 @@ let menu=[
 let nextMid=158,nextVid=1,nextUid=3;
 // Mesas como objetos con posición libre {id,nombre,x,y,w,h,shape}
 function _mesaDefaultPos(idx){const cols=4;return{x:(idx%cols)*150+12,y:Math.floor(idx/cols)*120+12};}
-let mesas=(function(){const nombres=["Mesa 1","Mesa 2","Mesa 3","Mesa 4","Mesa 5","Mesa 6","Mesa 7","Mesa 8","Mesa 9","Mesa 10","Mesa 11","Mesa 12","Mesa 13","Mesa 14","Barra 1","Barra 2","Barra 3","Para llevar 1","Para llevar 2"];return nombres.map(function(n,i){const p=_mesaDefaultPos(i);return{id:i+1,nombre:n,x:p.x,y:p.y,w:130,h:100,shape:'rect'};});})();
+let mesas=[
+  // Fila superior izquierda→derecha
+  {id:1, nombre:'Mesa 12',          x:10,   y:10,  w:150, h:100, shape:'rect'},
+  {id:2, nombre:'Mesa 11',          x:170,  y:10,  w:150, h:100, shape:'rect'},
+  {id:3, nombre:'Mesa 10',          x:330,  y:10,  w:150, h:100, shape:'rect'},
+  {id:4, nombre:'Mesa 9',           x:490,  y:10,  w:150, h:100, shape:'rect'},
+  {id:5, nombre:'Mesa 8',           x:650,  y:10,  w:150, h:100, shape:'rect'},
+  {id:6, nombre:'Mesa 7',           x:810,  y:10,  w:150, h:100, shape:'rect'},
+  {id:7, nombre:'Mesa 6',           x:970,  y:10,  w:150, h:100, shape:'rect'},
+  {id:8, nombre:'Mesa 5',           x:1130, y:10,  w:150, h:100, shape:'rect'},
+  {id:9, nombre:'Mesa 4-1',         x:1290, y:10,  w:130, h:100, shape:'rect'},
+  // Segunda fila: mesas redondas de concreto
+  {id:10,nombre:'Mesa Concreto 14', x:10,   y:130, w:150, h:100, shape:'round'},
+  {id:11,nombre:'Mesa Concreto 13', x:170,  y:130, w:150, h:100, shape:'round'},
+  // Para llevar (centro)
+  {id:12,nombre:'Para llevar 1',    x:490,  y:255, w:150, h:95,  shape:'rect'},
+  {id:13,nombre:'Para llevar 2',    x:490,  y:365, w:150, h:95,  shape:'rect'},
+  // Barras (columna centro-derecha)
+  {id:14,nombre:'Barra 1',          x:815,  y:130, w:130, h:90,  shape:'rect'},
+  {id:15,nombre:'Barra 2',          x:815,  y:255, w:130, h:90,  shape:'rect'},
+  {id:16,nombre:'Barra 3',          x:815,  y:365, w:130, h:90,  shape:'rect'},
+  // Derecha
+  {id:17,nombre:'Mesa 4-2',         x:1290, y:130, w:130, h:100, shape:'rect'},
+  {id:18,nombre:'Mesa 3',           x:1130, y:210, w:130, h:100, shape:'rect'},
+  {id:19,nombre:'Mesa 2',           x:1130, y:340, w:130, h:100, shape:'rect'},
+  {id:20,nombre:'Mesa 1',           x:1275, y:370, w:130, h:100, shape:'rect'},
+];
 let orders={},ventas=[],gastos=[],cierres=[];
 let users=[
   {id:1,name:"Carlos Mora",role:"admin",pin:"1234",allowedScreens:[...ALL_SCREENS]},
@@ -684,7 +710,10 @@ let _tDnd={active:false,src:null,arr:null,fromIdx:-1,ghost:null,lastTarget:null,
 function _tDndStart(e,arrName,fromIdx){
   if(_tDnd.active)return;
   e.preventDefault();
-  const el=e.currentTarget;
+  e.stopPropagation();
+  // El toque viene del handle (⠿); subimos al elemento arrastrable real
+  const handle=e.currentTarget;
+  const el=handle.closest('[data-dnd-arr]')||handle.parentElement;
   const touch=e.touches[0];
   const r=el.getBoundingClientRect();
   _tDnd={active:true,src:el,arr:arrName,fromIdx:fromIdx,ghost:null,lastTarget:null,offX:touch.clientX-r.left,offY:touch.clientY-r.top};
@@ -2393,6 +2422,56 @@ function buildPeriodosGastosDia(dia){
   return periodos;
 }
 
+/* ── EDITAR / ELIMINAR GASTOS (solo admin) ── */
+let _gastoEditPool=[];
+function _recalcCierreGastos(ci){
+  const c=cierres[ci];if(!c)return;
+  const gl=c.gastosList||[];
+  c.gastoCaja=gl.filter(function(g){return g.tipo==='caja';}).reduce(function(a,g){return a+g.monto;},0);
+  c.gastoFuerte=gl.filter(function(g){return g.tipo==='fuerte';}).reduce(function(a,g){return a+g.monto;},0);
+  c.gastoSinpe=gl.filter(function(g){return g.tipo==='sinpe';}).reduce(function(a,g){return a+g.monto;},0);
+  c.gastoTransf=gl.filter(function(g){return g.tipo==='transf';}).reduce(function(a,g){return a+g.monto;},0);
+  c.utilidad=(c.totalVentas||0)-c.gastoCaja;
+}
+function _findGastoSource(g){
+  const idx=gastos.indexOf(g);
+  if(idx>=0)return{type:'current',idx};
+  for(let ci=0;ci<cierres.length;ci++){
+    const gi=(cierres[ci].gastosList||[]).indexOf(g);
+    if(gi>=0)return{type:'cierre',ci,gi};
+  }
+  return null;
+}
+function editGasto(i){
+  if(!activeUser||activeUser.role!=='admin'){toast('Solo admin puede editar gastos');return;}
+  const g=_gastoEditPool[i];if(!g)return;
+  const nuevoDesc=prompt('Descripción del gasto:',g.desc);
+  if(nuevoDesc===null)return;
+  const nuevoMontoStr=prompt('Monto (₡):',g.monto);
+  if(nuevoMontoStr===null)return;
+  const m=parseFloat(nuevoMontoStr);
+  if(isNaN(m)||m<=0){toast('Monto inválido');return;}
+  g.desc=nuevoDesc.trim()||g.desc;
+  g.monto=Math.round(m);
+  // Si es histórico, recalcular totales del cierre
+  const src=_findGastoSource(g);
+  if(src&&src.type==='cierre')_recalcCierreGastos(src.ci);
+  saveLS();renderGastos();toast('✓ Gasto actualizado');
+}
+function deleteGasto(i){
+  if(!activeUser||activeUser.role!=='admin'){toast('Solo admin puede eliminar gastos');return;}
+  const g=_gastoEditPool[i];if(!g)return;
+  if(!confirm('¿Eliminar gasto "'+g.desc+'" — '+fmt(g.monto)+'?'))return;
+  const src=_findGastoSource(g);
+  if(!src){toast('Gasto no encontrado');return;}
+  if(src.type==='current'){
+    gastos.splice(src.idx,1);
+  } else {
+    cierres[src.ci].gastosList.splice(src.gi,1);
+    _recalcCierreGastos(src.ci);
+  }
+  saveLS();renderGastos();toast('✓ Gasto eliminado');
+}
 function renderGastos(){
   const NM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const NMlargo=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -2430,19 +2509,26 @@ function renderGastos(){
   if(calGastosSelDia){
     const periodos=buildPeriodosGastosDia(calGastosSelDia);
     if(periodos.length>1){
+      const isAdminGM=activeUser&&activeUser.role==='admin';
+      _gastoEditPool=[];
       const _gastosTablaHTML=function(lista){
-        if(!lista.length)return'<tr><td colspan="5" class="empty" style="color:#bbb;font-style:italic">Sin gastos en este período</td></tr>';
-        return lista.map(function(g){
+        if(!lista.length)return'<tr><td colspan="'+(isAdminGM?6:5)+'" class="empty" style="color:#bbb;font-style:italic">Sin gastos en este período</td></tr>';
+        // Registrar en pool para edición (acumulando)
+        const startIdx=_gastoEditPool.length;
+        _gastoEditPool.push(...lista);
+        return lista.map(function(g,i){
           const t=GASTO_TIPOS[g.tipo]||GASTO_TIPOS.caja;
+          const poolI=startIdx+i;
           return'<tr>'+
             '<td>'+(g.fecha||'&mdash;')+'</td>'+
             '<td>'+g.hora+'</td>'+
             '<td>'+g.desc+'</td>'+
             '<td><span class="badge '+t.cls+'">'+t.lbl+'</span></td>'+
             '<td>'+fmt(g.monto)+'</td>'+
+            (isAdminGM?'<td style="white-space:nowrap"><button class="btn-blue" style="padding:3px 8px;font-size:11px;width:auto;margin-right:4px" onclick="editGasto('+poolI+')">✎</button><button class="btn-red" style="padding:3px 8px;font-size:11px;width:auto" onclick="deleteGasto('+poolI+')">×</button></td>':'<td></td>')+
           '</tr>';
         }).join('')+
-        '<tr style="background:#f5f5f5"><td colspan="4" style="text-align:right;font-weight:700;font-size:12px;color:#555">Subtotal:</td><td style="font-weight:700">'+fmt(lista.reduce(function(a,g){return a+g.monto;},0))+'</td></tr>';
+        '<tr style="background:#f5f5f5"><td colspan="'+(isAdminGM?5:4)+'" style="text-align:right;font-weight:700;font-size:12px;color:#555">Subtotal:</td><td style="font-weight:700">'+fmt(lista.reduce(function(a,g){return a+g.monto;},0))+'</td>'+(isAdminGM?'<td></td>':'')+'</tr>';
       };
       let html='';
       // Periodo actual primero (orden inverso)
@@ -2469,7 +2555,7 @@ function renderGastos(){
         html+='<div style="font-size:16px;font-weight:700;color:#c0392b">'+fmt(pTotal)+'</div>';
         html+='</div>';
         if(tipoChips)html+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'+tipoChips+'</div>';
-        html+='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Fecha</th><th>Hora</th><th>Descripcion</th><th>Origen</th><th>Monto</th></tr></thead>';
+        html+='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Fecha</th><th>Hora</th><th>Descripcion</th><th>Origen</th><th>Monto</th>'+(isAdminGM?'<th></th>':'')+'</tr></thead>';
         html+='<tbody>'+_gastosTablaHTML(p.gastos)+'</tbody></table></div>';
         html+='</div>';
       });
@@ -2490,11 +2576,15 @@ function renderGastos(){
   _gwrap.style.display='none';
   _gcard.style.display='';
   const tbody=document.getElementById("gastosTbody");
+  const isAdminG=activeUser&&activeUser.role==='admin';
+  const thAcc=document.getElementById('gastosTh-acc');
+  if(thAcc)thAcc.style.display=isAdminG?'':'none';
+  _gastoEditPool=gPool.slice();
   if(!gPool.length){
-    tbody.innerHTML='<tr><td colspan="5" class="empty">Sin gastos para '+(calGastosSelDia?'este día':'este mes')+'</td></tr>';
+    tbody.innerHTML='<tr><td colspan="'+(isAdminG?6:5)+'" class="empty">Sin gastos para '+(calGastosSelDia?'este día':'este mes')+'</td></tr>';
     return;
   }
-  tbody.innerHTML=gPool.map(function(g){
+  tbody.innerHTML=gPool.map(function(g,i){
     const t=GASTO_TIPOS[g.tipo]||GASTO_TIPOS.caja;
     return'<tr>'+
       '<td>'+(g.fecha||'&mdash;')+'</td>'+
@@ -2502,9 +2592,10 @@ function renderGastos(){
       '<td>'+g.desc+'</td>'+
       '<td><span class="badge '+t.cls+'">'+t.lbl+'</span></td>'+
       '<td>'+fmt(g.monto)+'</td>'+
+      (isAdminG?'<td style="white-space:nowrap"><button class="btn-blue" style="padding:3px 8px;font-size:11px;width:auto;margin-right:4px" onclick="editGasto('+i+')">✎</button><button class="btn-red" style="padding:3px 8px;font-size:11px;width:auto" onclick="deleteGasto('+i+')">×</button></td>':'<td></td>')+
     '</tr>';
   }).join('')+
-  '<tr style="background:#f5f5f5"><td colspan="4" style="text-align:right;font-weight:700;font-size:12px;color:#555">Total:</td><td style="font-weight:700">'+fmt(totalG)+'</td></tr>';
+  '<tr style="background:#f5f5f5"><td colspan="'+(isAdminG?5:4)+'" style="text-align:right;font-weight:700;font-size:12px;color:#555">Total:</td><td style="font-weight:700">'+fmt(totalG)+'</td>'+(isAdminG?'<td></td>':'')+'</tr>';
 }
 
 /* ── CIERRE ── */
@@ -2984,8 +3075,8 @@ function renderMenuAdmin(){
   const canDrag=!menuAdminCatFiltro;
   list.innerHTML=(filtered.map((i,k)=>{
     const realIdx=menu.indexOf(i);
-    const drag=canDrag?` draggable="true" data-dnd-arr="menu" data-dnd-idx="${realIdx}" ondragstart="dndStart(event,'menu',${realIdx})" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,'menu',${realIdx})" ondragend="dndEnd(event)" ontouchstart="_tDndStart(event,'menu',${realIdx})"`:'';
-    const handle=canDrag?`<span class="dnd-handle" title="Mantener para reordenar">⠿</span>`:'';
+    const drag=canDrag?` draggable="true" data-dnd-arr="menu" data-dnd-idx="${realIdx}" ondragstart="dndStart(event,'menu',${realIdx})" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,'menu',${realIdx})" ondragend="dndEnd(event)"`:'';
+    const handle=canDrag?`<span class="dnd-handle" title="Arrastrar para reordenar" style="touch-action:none;padding:10px 8px;cursor:grab;font-size:16px" ontouchstart="_tDndStart(event,'menu',${realIdx})">⠿</span>`:'';
     return`<div class="item-edit-row" id="itemrow-${i.id}"${drag}>${handle}<span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-blue" onclick="startEditItem(${i.id})">✎ Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`;
   }).join(''))||`<div class="empty">No hay platillos en esta categoría</div>`;
   if(!canDrag&&filtered.length)list.innerHTML+='<div style="font-size:11px;color:#aaa;padding:6px 4px">Selecciona "Todas" para poder reordenar arrastrando</div>';
@@ -3023,8 +3114,8 @@ function delCat(idx){const c=cats[idx];if(menu.some(i=>i.cat===c)){toast("No se 
 function renderUsers(){
   const isAdmin=activeUser&&activeUser.role==="admin";
   document.getElementById("userGrid").innerHTML=users.map((u,idx)=>`
-    <div class="user-card"${isAdmin?` draggable="true" data-dnd-arr="users" data-dnd-idx="${idx}" ondragstart="dndStart(event,'users',${idx})" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,'users',${idx})" ondragend="dndEnd(event)" ontouchstart="_tDndStart(event,'users',${idx})"`:''}>` +
-    (isAdmin?`<div style="font-size:12px;color:#ccc;text-align:right;margin-bottom:4px;user-select:none">⠿</div>`:'')
+    <div class="user-card"${isAdmin?` draggable="true" data-dnd-arr="users" data-dnd-idx="${idx}" ondragstart="dndStart(event,'users',${idx})" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,'users',${idx})" ondragend="dndEnd(event)"`:''}>` +
+    (isAdmin?`<div style="font-size:16px;color:#bbb;text-align:right;margin-bottom:4px;user-select:none;touch-action:none;cursor:grab;padding:4px 0" ontouchstart="_tDndStart(event,'users',${idx})">⠿</div>`:'')
     +`
       <div class="avatar ${u.role==="admin"?"av-admin":"av-emp"}">${initials(u.name)}</div>
       <div style="font-size:14px;font-weight:600;color:#111">${u.name}</div>
