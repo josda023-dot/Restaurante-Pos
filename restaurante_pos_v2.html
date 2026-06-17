@@ -809,6 +809,7 @@ function verifyLogin(){
     activeUser=u;
     document.getElementById("loginOverlay").style.display="none";
     document.getElementById("activeUserLabel").textContent=u.name;
+    _resetInactivity();
     updateNav();
     goScreen(u.role==="admin"?"salon":(u.allowedScreens[0]||"salon"));
     renderSalon();
@@ -828,7 +829,13 @@ function verifyLogin(){
     setTimeout(()=>{loginPinStr="";updateLoginDots();const e=document.getElementById("loginErr");if(e)e.textContent="";},700);
   }
 }
-function doLogout(){activeUser=null;loginPinStr="";pendingLoginId=null;document.getElementById("activeUserLabel").textContent="";document.getElementById("loginOverlay").style.display="flex";showLoginUsers();}
+function doLogout(){
+  if(_inactivityTimer){clearTimeout(_inactivityTimer);_inactivityTimer=null;}
+  activeUser=null;loginPinStr="";pendingLoginId=null;
+  document.getElementById("activeUserLabel").textContent="";
+  document.getElementById("loginOverlay").style.display="flex";
+  showLoginUsers();
+}
 function updateNav(){
   const ADMIN_ONLY_SCREENS=new Set(["menu-admin","usuarios"]);
   ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(!b)return;const isAdm=activeUser&&activeUser.role==="admin";const show=activeUser&&(isAdm||(activeUser.allowedScreens.includes(s)&&!ADMIN_ONLY_SCREENS.has(s)));b.style.display=show?"":"none";});
@@ -2654,6 +2661,18 @@ function buildCierreBodyHTML(c){
     '<hr class="ticket-hr-dash">'+
     '<div class="ticket-bold"><span>SUMA:</span><span>'+fmt2(sumaNeta)+'</span></div>'+
     '<hr class="ticket-hr-solid">'+
+    (c.conteoFisico!=null?(
+      '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">CONTEO FÍSICO DE CAJA</div>'+
+      row('Sistema espera:',fmt2(c.efEnCaja||0))+
+      row('Conteo físico:',fmt2(c.conteoFisico))+
+      '<hr class="ticket-hr-dash">'+
+      (function(){
+        const dif=c.diferenciaCaja||0;
+        const label=dif===0?'✓ CUADRA EXACTO':dif>0?'SOBRA: +'+fmt2(dif):'FALTA: '+fmt2(Math.abs(dif));
+        return'<div class="ticket-bold" style="'+(dif!==0?'color:'+(dif>0?'#92400E':'#991B1B'):'')+';"><span>DIFERENCIA:</span><span>'+label+'</span></div>';
+      })()+
+      '<hr class="ticket-hr-solid">'
+    ):'')+
     '<div class="ticket-center" style="font-weight:800;font-size:15px;padding:3px 0">'+difLabel+'</div>'+
     '<hr class="ticket-hr-solid">'+
     '<div class="ticket-center" style="font-size:12px;margin-top:5px">* * * FIN DEL CIERRE * * *</div>'
@@ -2849,24 +2868,103 @@ function hacerCierre(){
   const hoy=localISO();
   const cierresHoy=cierres.filter(function(c){return c.fechaISO===hoy;}).length;
   if(cierresHoy>=2){toast('Ya se realizaron los 2 cierres del día de hoy');return;}
-  const esFinDia=cierresHoy===1; // segundo cierre = cierre final del día
+  const esFinDia=cierresHoy===1;
   const turnoNum=cierresHoy+1;
-  const msgConfirm=esFinDia
-    ?'⚠️ Cierre final del día — Turno 2\n\nDespués de este cierre no se registran más ventas hoy.\n¿Confirmar cierre del día?'
-    :'Confirmar cierre de turno (Turno 1 → inicio Turno 2)?';
-  if(!confirm(msgConfirm))return;
-  _cierreEnProceso=true;setTimeout(function(){_cierreEnProceso=false;},3000);
-  const d=new Date();
-  const pad=n=>String(n).padStart(2,"0");
-  const fecha=pad(d.getDate())+"/"+(pad(d.getMonth()+1))+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes());
+  // Calcular lo que el sistema espera en caja
   const {ef,tc,si}=calcMetodos(ventas);
-  const gastoCaja=gastos.filter(g=>g.tipo==="caja").reduce((a,g)=>a+g.monto,0);
-  const gastoFuerte=gastos.filter(g=>g.tipo==="fuerte").reduce((a,g)=>a+g.monto,0);
-  const gastoSinpe=gastos.filter(g=>g.tipo==="sinpe").reduce((a,g)=>a+g.monto,0);
-  const gastoTransf=gastos.filter(g=>g.tipo==="transf").reduce((a,g)=>a+g.monto,0);
-  const totalVentas=ef+tc+si;
+  const gastoCaja=gastos.filter(function(g){return g.tipo==='caja';}).reduce(function(a,g){return a+g.monto;},0);
   const efNeto=ef-gastoCaja;
   const efEnCaja=cajainicial+efNeto;
+  // Mostrar modal de conteo físico
+  _showConteoCajaModal(turnoNum,esFinDia,efEnCaja,ef,gastoCaja);
+}
+
+function _showConteoCajaModal(turnoNum,esFinDia,efEnCaja,efVentas,gastoCaja){
+  const old=document.getElementById('conteoCajaModal');if(old)old.remove();
+  const div=document.createElement('div');
+  div.id='conteoCajaModal';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px';
+  div.innerHTML=`
+    <div style="background:#fff;border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.35)">
+      <div style="font-size:18px;font-weight:800;color:#111;margin-bottom:4px">💵 Conteo de caja — Turno ${turnoNum}</div>
+      <div style="font-size:13px;color:#666;margin-bottom:20px">${esFinDia?'Cierre final del día':'Cierre de turno'}</div>
+      <div style="background:#f5f5f0;border-radius:10px;padding:14px;margin-bottom:16px;font-size:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="color:#555">Caja inicial:</span>
+          <span style="font-weight:600">${fmt(cajainicial||0)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="color:#555">Ventas en efectivo:</span>
+          <span style="font-weight:600">${fmt(efVentas)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="color:#555">Gastos de caja:</span>
+          <span style="font-weight:600;color:#E24B4A">- ${fmt(gastoCaja)}</span>
+        </div>
+        <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#085041;font-weight:700">Sistema espera en caja:</span>
+          <span style="font-weight:800;color:#085041">${fmt(efEnCaja)}</span>
+        </div>
+      </div>
+      <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px">¿Cuánto hay físicamente en caja ahora?</label>
+      <input type="number" id="conteoFisicoInput" min="0" inputmode="decimal" placeholder="Ej: ${Math.round(efEnCaja/1000)*1000}"
+        style="width:100%;border:2px solid #1D9E75;border-radius:10px;padding:14px;font-size:22px;text-align:center;font-weight:700;color:#085041;outline:none;box-sizing:border-box;margin-bottom:12px"
+        oninput="_actualizarDiferencia(${efEnCaja})">
+      <div id="conteoResultado" style="border-radius:10px;padding:12px;text-align:center;font-size:15px;font-weight:700;margin-bottom:18px;display:none"></div>
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('conteoCajaModal').remove()"
+          style="flex:1;padding:12px;border-radius:8px;border:1px solid #ddd;background:#f5f5f0;font-size:14px;cursor:pointer">✕ Cancelar</button>
+        <button id="btnConfirmarCierreConteo" onclick="_confirmarCierreConConteo(${turnoNum},${esFinDia},${efEnCaja})"
+          style="flex:2;padding:12px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar cierre</button>
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+  setTimeout(function(){const inp=document.getElementById('conteoFisicoInput');if(inp)inp.focus();},100);
+}
+
+function _actualizarDiferencia(efEnCaja){
+  const inp=document.getElementById('conteoFisicoInput');
+  const res=document.getElementById('conteoResultado');
+  if(!inp||!res)return;
+  const val=parseFloat(inp.value);
+  if(isNaN(val)||inp.value===''){res.style.display='none';return;}
+  const dif=Math.round(val)-Math.round(efEnCaja);
+  res.style.display='block';
+  if(dif===0){
+    res.style.background='#E1F5EE';res.style.color='#085041';
+    res.innerHTML='✓ CUADRA EXACTO';
+  } else if(dif>0){
+    res.style.background='#FFF8E1';res.style.color='#92400E';
+    res.innerHTML='SOBRA: +'+fmt(dif)+' (hay más de lo esperado)';
+  } else {
+    res.style.background='#FFF1F0';res.style.color='#991B1B';
+    res.innerHTML='FALTA: '+fmt(Math.abs(dif))+' (hay menos de lo esperado)';
+  }
+}
+
+function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja){
+  const inp=document.getElementById('conteoFisicoInput');
+  const conteoFisico=inp?Math.round(parseFloat(inp.value)||0):null;
+  if(conteoFisico===null||inp.value===''){
+    toast('Ingresá el monto físico en caja');
+    if(inp)inp.focus();
+    return;
+  }
+  const diferenciaCaja=conteoFisico-Math.round(efEnCaja);
+  const old=document.getElementById('conteoCajaModal');if(old)old.remove();
+  _cierreEnProceso=true;setTimeout(function(){_cierreEnProceso=false;},3000);
+  const hoy=localISO();
+  const d=new Date();
+  const pad=function(n){return String(n).padStart(2,'0');};
+  const fecha=pad(d.getDate())+'/'+(pad(d.getMonth()+1))+'/'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+  const {ef,tc,si}=calcMetodos(ventas);
+  const gastoCaja=gastos.filter(function(g){return g.tipo==='caja';}).reduce(function(a,g){return a+g.monto;},0);
+  const gastoFuerte=gastos.filter(function(g){return g.tipo==='fuerte';}).reduce(function(a,g){return a+g.monto;},0);
+  const gastoSinpe=gastos.filter(function(g){return g.tipo==='sinpe';}).reduce(function(a,g){return a+g.monto;},0);
+  const gastoTransf=gastos.filter(function(g){return g.tipo==='transf';}).reduce(function(a,g){return a+g.monto;},0);
+  const totalVentas=ef+tc+si;
+  const efNeto=ef-gastoCaja;
   const utilidad=efNeto+tc+si;
   const cierreData={
     fecha,fechaISO:hoy,turno:turnoNum,
@@ -2875,6 +2973,7 @@ function hacerCierre(){
     gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
     efNeto,efEnCaja,cajainicial,
     utilidad,
+    conteoFisico,diferenciaCaja,
     ventasList:[...ventas],
     gastosList:[...gastos],
     billetesCaja:{...cajaBilletes}
@@ -2886,21 +2985,14 @@ function hacerCierre(){
   saveLS();
   renderCierre();
   enviarNotifCierre(cierreData,turnoNum);
-  // Mostrar botón imprimir justo después del cierre
   const _btnsEl=document.getElementById('cierreBtns');
   if(_btnsEl){
     const _cIdx=cierres.indexOf(cierreData);
     _btnsEl.innerHTML='<button class="btn-sec" style="font-size:15px;padding:10px 22px;font-weight:700" onclick="printCierreReport(cierres['+_cIdx+'])">🖨 Imprimir cierre Turno '+turnoNum+'</button>';
   }
   if(esFinDia){
-    // Turno 2 — fin de día: logout sin pedir caja
-    // NO se borra rpos_cajaPedida para que no vuelva a pedir caja si alguien entra hoy
-    setTimeout(function(){
-      toast('✅ Día finalizado. ¡Hasta mañana! 🌙');
-      setTimeout(doLogout,1800);
-    },600);
+    setTimeout(function(){toast('✅ Día finalizado. ¡Hasta mañana! 🌙');setTimeout(doLogout,1800);},600);
   } else {
-    // Turno 1 — pide caja inicial para el siguiente turno
     localStorage.removeItem('rpos_cajaPedida');
     setTimeout(function(){showCajaInicialModal(true);},600);
   }
@@ -3582,6 +3674,27 @@ function buildComandaHTML(mesa,ord){
 
 /* ── TOAST ── */
 function toast(msg){const old=document.getElementById("_toast");if(old)old.remove();const t=document.createElement("div");t.className="toast";t.id="_toast";t.innerHTML=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);}
+
+/* ── AUTO-LOGOUT POR INACTIVIDAD ── */
+let _inactivityTimer=null;
+const _INACTIVITY_MS=3*60*1000; // 3 minutos
+function _resetInactivity(){
+  if(!activeUser)return;
+  if(_inactivityTimer)clearTimeout(_inactivityTimer);
+  _inactivityTimer=setTimeout(function(){
+    if(!activeUser)return;
+    // No cerrar si hay un modal abierto o cierre en proceso
+    const modalesActivos=['mesaModal','efModal','splitModal','splitV2Modal','conteoCajaModal','cajaInicialModal','pinCobroModal'];
+    if(_cierreEnProceso||modalesActivos.some(function(id){return document.getElementById(id);})){
+      _resetInactivity();return;
+    }
+    doLogout();
+    setTimeout(function(){toast('🔒 Sesión cerrada por inactividad');},200);
+  },_INACTIVITY_MS);
+}
+['click','touchstart','keydown','scroll','mousemove'].forEach(function(ev){
+  document.addEventListener(ev,_resetInactivity,{passive:true});
+});
 
 /* ── INIT ── */
 try{
