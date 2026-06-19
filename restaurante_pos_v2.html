@@ -65,20 +65,21 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
 .mesa-icon{font-size:22px;margin-bottom:6px}
 .overlay-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:16px;z-index:100;overflow-y:auto}
 .modal{background:#fff;border-radius:12px;border:1px solid #ddd;width:100%;max-width:1080px;display:grid;grid-template-columns:1fr 350px;min-height:600px;max-height:calc(100vh - 32px);overflow:hidden}
-.modal-menu{overflow-y:auto;padding:16px;border-right:1px solid #eee;max-height:calc(100vh - 32px)}
+.modal-menu{display:flex;flex-direction:column;padding:16px;border-right:1px solid #eee;max-height:calc(100vh - 32px);overflow:hidden}
 .modal-order{display:flex;flex-direction:column;padding:14px;max-height:calc(100vh - 32px);overflow:hidden}
-.modal-title{font-size:15px;font-weight:600;margin-bottom:12px;color:#111}
-.cat-tabs{display:block;margin-bottom:12px}
+.modal-title{font-size:15px;font-weight:600;margin-bottom:12px;color:#111;flex-shrink:0}
+.cat-tabs{display:block;margin-bottom:12px;flex-shrink:0}
+.menu-items-header{flex-shrink:0}
 .ctab{padding:8px 16px;border-radius:20px;border:none;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;transition:opacity .1s}
 .ctab:hover{opacity:.85}
 .ctab.active{outline:2.5px solid #1D9E75;outline-offset:2px}
-.menu-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
-.mi{background:#f8f8f6;border-radius:10px;padding:14px 10px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;transition:border-color .1s;user-select:none}
+.menu-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:7px;overflow-y:auto;flex:1;min-height:0;align-content:start}
+.mi{background:#f8f8f6;border-radius:9px;padding:9px 7px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;transition:border-color .1s;user-select:none}
 .mi:hover{border-color:#999;background:#efefec}
 .mi:active{transform:scale(.97)}
-.mi-em{font-size:24px;margin-bottom:5px}
-.mi-nm{font-size:12px;font-weight:600;color:#111;line-height:1.3;margin-bottom:4px}
-.mi-pr{font-size:13px;color:#1D9E75;font-weight:600}
+.mi-em{font-size:20px;margin-bottom:3px}
+.mi-nm{font-size:11px;font-weight:600;color:#111;line-height:1.2;margin-bottom:2px}
+.mi-pr{font-size:12px;color:#1D9E75;font-weight:600}
 .order-items-list{flex:1;overflow-y:auto;margin-bottom:10px;min-height:0}
 .or{display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid #f0f0f0}
 .or:last-child{border:none}
@@ -206,6 +207,7 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
 .nk.del{font-size:15px;color:#666}
 @keyframes shake{0%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}100%{transform:translateX(0)}}
 .shake{animation:shake .35s}
+@keyframes pulso-alerta{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.85;transform:scale(1.04)}}
 /* SPLIT */
 .split-modal{background:#fff;border-radius:12px;border:1px solid #ddd;width:100%;max-width:600px;padding:20px}
 .grp-row{border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -368,9 +370,11 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
         </div>
         <div class="card" style="margin-top:16px">
           <div class="section-title">&#128276; Notificaciones</div>
-          <div class="form-row"><div style="flex:1"><label>Tema ntfy</label><input class="fi" id="tc-ntfy" placeholder="ej: soda-tucan-daniel"></div></div>
+          <div class="form-row"><div style="flex:1"><label>Tema ntfy (cierres)</label><input class="fi" id="tc-ntfy" placeholder="ej: soda-tucan-daniel"></div></div>
+          <div class="form-row" style="margin-top:8px"><div style="flex:1"><label>&#128203; Canal tablet → compu (sincronización)</label><input class="fi" id="tc-tablet-topic" placeholder="ej: soda-tucan-tablet-sync"><div style="font-size:11px;color:#888;margin-top:3px">Nombre único para sincronizar pedidos de la tablet con la compu principal. No es una notificación al celular — es el canal interno entre los dos equipos (requiere internet en ambos).</div></div></div>
           <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="btn-sec" onclick="probarNotifCierre()">&#128172; Probar</button>
+            <button class="btn-sec" onclick="probarNotifCierre()">&#128172; Probar cierre</button>
+            <button class="btn-sec" onclick="probarNotifTablet()">&#128203; Probar sync tablet</button>
             <button class="btn-green" onclick="saveTicketConfig()">&#10003; Guardar</button>
           </div>
         </div>
@@ -672,7 +676,10 @@ let cobraItbis=true,cobraServicio=false;
 let tipoCambio=parseInt(localStorage.getItem('rpos_tipoCambio'))||530; // colones por dólar
 let efModoUSD=false; // efectivo modal en modo dólares
 let efDolaresAmt=''; // monto ingresado en dólares
-let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false,ntfyTopic:''};
+let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false,ntfyTopic:'',tabletTopic:''};
+let _tabletSSE=null;            // EventSource SSE para pedidos tablet en tiempo real
+let _tabletPollInterval=null;   // setInterval fallback si SSE falla
+let _tabletPedidosVistos=new Set(); // dedup de pedidos ya procesados (ts|mesa)
 let ventasFiltro=null;
 let ventasMesFiltro=null;
 let ventasDiaFiltro=localISO(); // arranca mostrando hoy
@@ -810,6 +817,7 @@ function verifyLogin(){
     document.getElementById("loginOverlay").style.display="none";
     document.getElementById("activeUserLabel").textContent=u.name;
     _resetInactivity();
+    if(!TABLET_MODE)_iniciarPollTablet();
     updateNav();
     goScreen(u.role==="admin"?"salon":(u.allowedScreens[0]||"salon"));
     renderSalon();
@@ -831,6 +839,7 @@ function verifyLogin(){
 }
 function doLogout(){
   if(_inactivityTimer){clearTimeout(_inactivityTimer);_inactivityTimer=null;}
+  _detenerPollTablet();
   activeUser=null;loginPinStr="";pendingLoginId=null;
   document.getElementById("activeUserLabel").textContent="";
   document.getElementById("loginOverlay").style.display="flex";
@@ -1083,11 +1092,11 @@ function renderMesaModal(){
   // Guardar posiciones de scroll antes de reconstruir el DOM
   const _pOL=document.querySelector('.order-items-list');
   const _olST=_pOL?_pOL.scrollTop:-1;const _olSH=_pOL?_pOL.scrollHeight:0;const _olCH=_pOL?_pOL.clientHeight:0;
-  const _pMM=document.querySelector('.modal-menu');const _mmST=_pMM?_pMM.scrollTop:0;
+  const _pMM=document.getElementById('menuItemsGrid');const _mmST=_pMM?_pMM.scrollTop:0;
   const _restoreScroll=function(){setTimeout(function(){
     const ol=document.querySelector('.order-items-list');
     if(ol){const atBot=_olST<0||(_olSH-_olST-_olCH<100);ol.scrollTop=atBot?ol.scrollHeight:_olST;}
-    const mm=document.querySelector('.modal-menu');if(mm&&_mmST>0)mm.scrollTop=_mmST;
+    const mm=document.getElementById('menuItemsGrid');if(mm&&_mmST>0)mm.scrollTop=_mmST;
   },0);};
   const old=document.getElementById("mesaModal");if(old)old.remove();
   const availCats=[...new Set(menu.map(i=>i.cat))].filter(c=>cats.includes(c));
@@ -1107,7 +1116,7 @@ function renderMesaModal(){
   if(TABLET_MODE){
     div.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:stretch;justify-content:center;padding:0;z-index:100;overflow:hidden";
     const tabItemsFiltrados=menuBusqueda.trim()?menu.filter(i=>i.name.toLowerCase().includes(menuBusqueda.toLowerCase())):menu.filter(i=>i.cat===activeCat);
-    const tabItems=tabItemsFiltrados.map(i=>`<div onclick="addToOrder(${i.id})" style="background:#f8f8f6;border-radius:12px;padding:14px 8px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;user-select:none"><div style="font-size:26px;margin-bottom:6px">${i.emoji}</div><div style="font-size:12px;font-weight:600;color:#111;line-height:1.3;margin-bottom:4px">${i.name}</div><div style="font-size:13px;color:#1D9E75;font-weight:700">${fmt(i.price)}</div></div>`).join('')||`<div style="color:#999;padding:20px;text-align:center">${menuBusqueda?'Sin resultados':'Sin platillos'}</div>`;
+    const tabItems=tabItemsFiltrados.map(i=>`<div onclick="addToOrder(${i.id})" style="background:#f8f8f6;border-radius:9px;padding:8px 6px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;user-select:none"><div style="font-size:20px;margin-bottom:3px">${i.emoji}</div><div style="font-size:11px;font-weight:600;color:#111;line-height:1.2;margin-bottom:2px">${i.name}</div><div style="font-size:12px;color:#1D9E75;font-weight:700">${fmt(i.price)}</div></div>`).join('')||`<div style="color:#999;padding:20px;text-align:center">${menuBusqueda?'Sin resultados':'Sin platillos'}</div>`;
     const tabMainAvail=availCats.filter(function(c){return!c.startsWith('+');});
     const tabAddAvail=availCats.filter(function(c){return c.startsWith('+');});
     const tabAdicionalesActivo=activeCat.startsWith('+');
@@ -1127,7 +1136,7 @@ function renderMesaModal(){
           ${menuBusqueda?`<button onclick="setMenuBusqueda('')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;font-size:18px;line-height:1">&times;</button>`:''}
         </div>
         <div id="menuCatTabs" style="flex-shrink:0;${menuBusqueda?'display:none':''}">${tabCats}</div>
-        <div id="menuItemsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:9px">${tabItems}</div>
+        <div id="menuItemsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:7px">${tabItems}</div>
       </div>
       <div style="display:flex;flex-direction:column;padding:16px;background:#fafaf8">
         <div style="font-size:15px;font-weight:700;color:#111;margin-bottom:10px;flex-shrink:0">Orden</div>
@@ -1154,11 +1163,11 @@ function renderMesaModal(){
   const items=itemsFiltrados.map(i=>`<div class="mi" onclick="addToOrder(${i.id})"><div class="mi-em">${i.emoji}</div><div class="mi-nm">${i.name}</div><div class="mi-pr">${fmt(i.price)}</div></div>`).join("")||`<div class="empty">${menuBusqueda?'Sin resultados para "'+menuBusqueda+'"':'Sin platillos'}</div>`;
   div.innerHTML=`<div class="modal">
     <div class="modal-menu">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div class="modal-title">${activeMesa}</div>
+      <div class="menu-items-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="modal-title" style="margin-bottom:0">${activeMesa}</div>
         <button class="btn-sec" style="width:auto;padding:6px 14px" onclick="closeMesa()">&times; Cerrar</button>
       </div>
-      <div style="position:relative;margin-bottom:8px">
+      <div class="menu-items-header" style="position:relative;margin-bottom:8px">
         <input type="text" id="menuBusqInput" value="${menuBusqueda.replace(/"/g,'&quot;')}" placeholder="🔍 Buscar platillo..." oninput="setMenuBusqueda(this.value)" style="width:100%;padding:7px 30px 7px 10px;border:1.5px solid ${menuBusqueda?'#1D9E75':'#ddd'};border-radius:8px;font-size:13px;outline:none;box-sizing:border-box">
         ${menuBusqueda?`<button onclick="setMenuBusqueda('')" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;font-size:16px;line-height:1">&times;</button>`:''}
       </div>
@@ -3430,6 +3439,7 @@ function renderTicketConfig(){
   const fs2=document.getElementById("tc-servicio");if(fs2)fs2.checked=tc.defaultServicio===true;
   const fe=document.getElementById("tc-empleado");if(fe)fe.checked=tc.mostrarEmpleado!==false;
   const fn2=document.getElementById("tc-ntfy");if(fn2)fn2.value=tc.ntfyTopic||'';
+  const ftt=document.getElementById("tc-tablet-topic");if(ftt)ftt.value=tc.tabletTopic||'';
   renderTicketPreview();
 }
 function saveTicketConfig(){
@@ -3442,6 +3452,7 @@ function saveTicketConfig(){
   ticketConfig.defaultServicio=document.getElementById("tc-servicio")?.checked===true;
   ticketConfig.mostrarEmpleado=document.getElementById("tc-empleado")?.checked!==false;
   ticketConfig.ntfyTopic=document.getElementById("tc-ntfy")?.value.trim()||'';
+  ticketConfig.tabletTopic=document.getElementById("tc-tablet-topic")?.value.trim()||'';
   saveLS();renderTicketPreview();toast("\u2713 Configuraci\u00f3n guardada");
 }
 function renderTicketPreview(){
@@ -3633,9 +3644,114 @@ function enviarACocina(){
   const ord=orders[activeMesa];
   if(!ord||!ord.items.length)return;
   imprimirComanda(activeMesa,ord);
+  _enviarPedidoNtfy(activeMesa,ord);
   toast('✅ Comanda enviada a cocina');
   closeMesa();
 }
+function _enviarPedidoNtfy(mesaNombre,ord){
+  const topic=(ticketConfig.tabletTopic||'').trim();
+  if(!topic)return;
+  const mesero=activeUser?activeUser.name:'Mesero';
+  const total=ord.items.reduce(function(a,i){return a+i.price*i.qty;},0);
+  const lineas=ord.items.map(function(i){return i.qty+'x '+i.name+(i.nota?' ('+i.nota+')':'');}).join('\n');
+  const payload=JSON.stringify({
+    type:'pedido',
+    mesa:mesaNombre,
+    mesero:mesero,
+    ts:Date.now(),
+    items:ord.items.map(function(i){return{name:i.name,qty:i.qty,price:i.price,nota:i.nota||''};}),
+    total:total
+  });
+  // Mensaje silencioso — solo sirve para que la compu principal reciba la orden automáticamente
+  const body=lineas+'\nTotal: '+fmt(total)+'\n||'+payload;
+  const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1';
+  fetch(url,{method:'POST',body:body}).catch(function(){});
+}
+function probarNotifTablet(){
+  const topic=(document.getElementById('tc-tablet-topic')?.value||ticketConfig.tabletTopic||'').trim();
+  if(!topic){toast('Primero ingresá el tema tablet y guardá');return;}
+  const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1';
+  const ts=Date.now();
+  const body='2x Casado pollo\n1x Refresco natural\nTotal: ₡8,600\n||{"type":"pedido","mesa":"Mesa 1","mesero":"Prueba","ts":'+ts+',"items":[{"name":"Casado pollo","qty":2,"price":3500,"nota":""},{"name":"Refresco natural","qty":1,"price":1600,"nota":""}],"total":8600}';
+  fetch(url,{method:'POST',body:body})
+    .then(function(r){if(r.ok)toast('✓ Mensaje de prueba enviado — en segundos debería aparecer en la compu principal');else toast('Error '+r.status+' — revisá el tema tablet');})
+    .catch(function(){toast('Sin conexión a internet — ntfy.sh no disponible');});
+}
+/* ── SYNC PEDIDOS TABLET → COMPU PRINCIPAL (SSE en tiempo real) ── */
+function _iniciarPollTablet(){
+  if(TABLET_MODE)return;
+  _detenerPollTablet();
+  const topic=(ticketConfig.tabletTopic||'').trim();
+  if(!topic)return;
+  // Primero: polling de los últimos 5 min para recuperar pedidos recientes
+  _pollTabletFallback(300);
+  // Segundo: abrir SSE para recibir pedidos en tiempo real desde ahora
+  try{
+    const sseUrl='https://ntfy.sh/'+encodeURIComponent(topic)+'/sse?since='+Math.floor(Date.now()/1000);
+    _tabletSSE=new EventSource(sseUrl);
+    _tabletSSE.addEventListener('message',function(e){
+      let msg;try{msg=JSON.parse(e.data);}catch(err){return;}
+      _procesarMensajeTablet(msg);
+    });
+    _tabletSSE.onerror=function(){
+      // Si SSE cae, cambia a polling cada 10 seg como fallback
+      if(_tabletSSE){_tabletSSE.close();_tabletSSE=null;}
+      if(!_tabletPollInterval){
+        _tabletPollInterval=setInterval(function(){_pollTabletFallback(15);},10000);
+      }
+    };
+  }catch(e){
+    // Navegador sin soporte SSE → polling cada 10 seg
+    _tabletPollInterval=setInterval(function(){_pollTabletFallback(15);},10000);
+  }
+}
+function _detenerPollTablet(){
+  if(_tabletSSE){_tabletSSE.close();_tabletSSE=null;}
+  if(_tabletPollInterval){clearInterval(_tabletPollInterval);_tabletPollInterval=null;}
+}
+function _pollTabletFallback(segundosAtras){
+  const topic=(ticketConfig.tabletTopic||'').trim();
+  if(!topic)return;
+  const since=Math.floor(Date.now()/1000)-(segundosAtras||60);
+  fetch('https://ntfy.sh/'+encodeURIComponent(topic)+'/json?poll=1&since='+since)
+    .then(function(r){return r.ok?r.text():null;})
+    .then(function(txt){
+      if(!txt)return;
+      txt.trim().split('\n').forEach(function(line){
+        if(!line)return;
+        let msg;try{msg=JSON.parse(line);}catch(e){return;}
+        if(msg.event==='message')_procesarMensajeTablet(msg);
+      });
+    }).catch(function(){});
+}
+function _procesarMensajeTablet(msg){
+  const body=msg.message||'';
+  const sep=body.indexOf('\n||');
+  if(sep<0)return;
+  let pedido;try{pedido=JSON.parse(body.slice(sep+3));}catch(e){return;}
+  if(pedido.type!=='pedido')return;
+  // Dedup: ignorar si ya procesamos este pedido (mismo ts + mesa)
+  const key=pedido.ts+'|'+pedido.mesa;
+  if(_tabletPedidosVistos.has(key))return;
+  _tabletPedidosVistos.add(key);
+  // Buscar la mesa en el salon
+  const mesaObj=mesas.find(function(m){return m.nombre===pedido.mesa;});
+  if(!mesaObj){toast('📲 Pedido de tablet: mesa "'+pedido.mesa+'" no encontrada en el salón');return;}
+  // Agregar los items automáticamente a la orden de esa mesa
+  if(!orders[pedido.mesa]){orders[pedido.mesa]={items:[],payMethod:null};}
+  pedido.items.forEach(function(pi){
+    const ex=orders[pedido.mesa].items.find(function(o){return o.name===pi.name&&o.price===pi.price;});
+    if(ex){ex.qty+=pi.qty;}
+    else{orders[pedido.mesa].items.push({id:Date.now()+Math.random(),name:pi.name,price:pi.price,qty:pi.qty,nota:pi.nota||''});}
+  });
+  saveLS();
+  renderSalon();
+  // Si la mesa está abierta en este momento, refrescar el modal también
+  if(activeMesa===pedido.mesa)renderMesaModal();
+  const totalItems=pedido.items.reduce(function(a,i){return a+i.qty;},0);
+  toast('📲 '+pedido.mesa+': '+totalItems+' platillo'+(totalItems!==1?'s':'')+' agregado'+(totalItems!==1?'s':'')+' desde tablet ('+pedido.mesero+')');
+}
+
 function imprimirComanda(mesa,ord){
   const w=window.open('','_blank','width=420,height=700');
   if(!w){toast('⚠️ Permitié ventanas emergentes para imprimir');return;}
