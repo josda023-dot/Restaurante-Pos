@@ -680,6 +680,7 @@ let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:
 let _tabletSSE=null;            // EventSource SSE para pedidos tablet en tiempo real
 let _tabletPollInterval=null;   // setInterval fallback si SSE falla
 let _tabletPedidosVistos=new Set(); // dedup de pedidos ya procesados (ts|mesa)
+let _archiveDB=null;            // IndexedDB — archivo histórico ilimitado de ventas y cierres
 let ventasFiltro=null;
 let ventasMesFiltro=null;
 let ventasDiaFiltro=localISO(); // arranca mostrando hoy
@@ -1428,6 +1429,9 @@ function confirmarPago(cobradoPor){
   if(payMethod==="Efectivo"&&!efModoUSD){for(const[v,c]of Object.entries(efBilletes))cajaBilletes[v]=(cajaBilletes[v]||0)+c;for(const vd of vueltoDesg)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
   efModoUSD=false;efDolaresAmt='';
   const ventaGuardada=ventas[ventas.length-1];
+  _archivarVenta(ventaGuardada); // guardar en archivo histórico (IndexedDB)
+  // Guardar la venta al disco PRIMERO antes de borrar la orden (protección contra corte de luz)
+  try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
   orders[activeMesa]={items:[]};saveLS();closeEfModal();closeMesa();
   showTicket(ventaGuardada);
 }
@@ -1610,6 +1614,9 @@ function sv2Finalizar(cobradoPor){
   });
   if(sv2Method==='Efectivo'&&!sv2ModoUSD){for(const[bv,bc]of Object.entries(sv2EfBilletes))cajaBilletes[bv]=(cajaBilletes[bv]||0)+bc;for(const vd of vueltoDesgSplit)cajaBilletes[vd.val]=Math.max(0,(cajaBilletes[vd.val]||0)-vd.cnt);}
   sv2ModoUSD=false;sv2DolaresAmt='';
+  _archivarVenta(ventas[ventas.length-1]); // guardar en archivo histórico (IndexedDB)
+  // Guardar la venta al disco PRIMERO antes de modificar la orden
+  try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
   // Quitar los ítems pagados de la mesa
   Object.keys(sv2Sel).forEach(function(id){
     const idx=ord.items.findIndex(function(i){return i.id===parseInt(id);});
@@ -1998,6 +2005,9 @@ function finalizarPagoSplit(cobradoPor){
     }
   }
   ventas.push({id:nextVid++,hora:hm,fecha:localISO(now),mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
+  _archivarVenta(ventas[ventas.length-1]); // guardar en archivo histórico (IndexedDB)
+  // Guardar venta al disco PRIMERO antes de borrar la orden
+  try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
   orders[activeMesa]={items:[]};
   splitGroups=[];splitAssignment={};splitEfBilletes={};splitEfQueue=[];
   const ventaGuardada=ventas[ventas.length-1];
@@ -2132,7 +2142,7 @@ function buildCalHTML(year,month,datesV,datesC,selDate,prevFn,nextFn,dayFn,leyen
     else if(hasC)cls+=' cal-ambar';
     if(isToday)cls+=' cal-hoy';
     const dot=(hasV?'<div class="cal-pv'+(isSel?' cal-psel':'')+'"></div>':'')+(hasC?'<div class="cal-pc'+(isSel?' cal-psel':'')+'"></div>':'');
-    cells+='<div class="'+cls+' cal-activo" onclick="'+dayFn+'(\''+iso+'\')" style="cursor:pointer"><span class="cal-n">'+d+'</span>'+(dot?'<div class="cal-dots">'+dot+'</div>':'')+'</div>';
+    cells+='<div class="'+cls+' cal-activo" data-caliso="'+iso+'" onclick="'+dayFn+'(\''+iso+'\')" style="cursor:pointer"><span class="cal-n">'+d+'</span>'+(dot?'<div class="cal-dots">'+dot+'</div>':'')+'</div>';
   }
   const hdr=DIAS.map(function(d){return'<div class="cal-hcell">'+d+'</div>';}).join('');
   const ley=leyenda||'';
@@ -2257,6 +2267,8 @@ function renderVentas(){
       empleados.map(function(e){return'<button onclick="setVentasFiltro(\''+e.replace(/'/g,"\\'")+'\')" style="'+bs(ventasFiltro===e)+'">'+e+'</button>';}).join('')+
     '</div>':'';
     fb.innerHTML=calHtml+todoBtn+empBar;
+    // Añadir puntos del archivo histórico al calendario de forma asíncrona
+    _actualizarDotsVentasArchivo(cy,cm);
   }
   const vf=ventasFiltro?pool.filter(function(v){return v.cobradoPor===ventasFiltro;}):pool;
   const {ef,tc,si}=calcMetodos(vf);
@@ -2345,13 +2357,85 @@ function renderVentas(){
   _cardSimple.style.display='';
   const tbody=document.getElementById("ventasTbody");
   if(!vf.length){
-    tbody.innerHTML='<tr><td colspan="9" class="empty">Sin ventas para '+(ventasDiaFiltro?'este día':'este mes')+'</td></tr>';
+    // Si es un día histórico (>7 días) y hay archivo en IndexedDB, cargar automáticamente
+    const _hace7d=localISO(new Date(Date.now()-7*24*60*60*1000));
+    if(ventasDiaFiltro&&_archiveDB&&ventasDiaFiltro<_hace7d){
+      tbody.innerHTML='<tr><td colspan="9" style="padding:16px;text-align:center;color:#888">🔄 Cargando…</td></tr>';
+      _cargarVentasArchivoUI(ventasDiaFiltro); // carga automática desde IndexedDB
+    } else {
+      tbody.innerHTML='<tr><td colspan="9" class="empty">Sin ventas para '+(ventasDiaFiltro?'este día':'este mes')+'</td></tr>';
+    }
     return;
   }
   _ventasDisplayPool=vf;
   tbody.innerHTML=_ventasTablaHTML(vf,0);
 }
 
+// Añadir puntos al calendario de ventas para días con datos en el archivo histórico (IndexedDB)
+// Se llama después de renderizar el calendario — añade puntos verdes a los días que no tienen datos en localStorage
+function _actualizarDotsVentasArchivo(cy,cm){
+  if(!_archiveDB)return;
+  const mesStr=cy+'-'+String(cm).padStart(2,'0');
+  const lower=mesStr+'-01';
+  const upper=mesStr+'-31￿';
+  try{
+    const tx=_archiveDB.transaction('ventas','readonly');
+    const idx=tx.objectStore('ventas').index('fecha');
+    const req=idx.getAll(IDBKeyRange.bound(lower,upper));
+    req.onsuccess=function(){
+      if(!req.result||!req.result.length)return;
+      const archiveDates=new Set(req.result.map(function(v){return v.fecha;}).filter(Boolean));
+      archiveDates.forEach(function(iso){
+        const cell=document.querySelector('[data-caliso="'+iso+'"]');
+        if(!cell)return;
+        // Si el día ya tiene un punto verde (local), no agregar nada extra
+        if(cell.querySelector('.cal-pv'))return;
+        // Añadir el punto verde del archivo
+        let dotsDiv=cell.querySelector('.cal-dots');
+        if(!dotsDiv){
+          dotsDiv=document.createElement('div');
+          dotsDiv.className='cal-dots';
+          cell.appendChild(dotsDiv);
+        }
+        const dot=document.createElement('div');
+        dot.className='cal-pv';
+        dot.title='Ventas en archivo histórico';
+        dotsDiv.appendChild(dot);
+        // Añadir clase para resaltado visual si no tiene ya color
+        if(!cell.classList.contains('cal-verde')&&!cell.classList.contains('cal-ambos')){
+          cell.classList.add('cal-verde');
+        }
+      });
+    };
+  }catch(e){}
+}
+
+// Cargar ventas de un día histórico desde el archivo IndexedDB y mostrarlas en la tabla
+function _cargarVentasArchivoUI(fecha){
+  const tbody=document.getElementById("ventasTbody");
+  if(tbody)tbody.innerHTML='<tr><td colspan="9" style="padding:16px;text-align:center;color:#888">🔄 Cargando del archivo histórico…</td></tr>';
+  _buscarVentasArchivo(fecha,function(vList){
+    if(!vList||!vList.length){
+      if(tbody)tbody.innerHTML='<tr><td colspan="9" class="empty">No hay ventas registradas en el archivo para este día</td></tr>';
+      return;
+    }
+    vList.sort(function(a,b){return(a.hora||'').localeCompare(b.hora||'');});
+    _ventasDisplayPool=vList;
+    if(tbody)tbody.innerHTML=_ventasTablaHTML(vList,0);
+    const NMlargo2=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const NM2=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const fmtD=function(d){const p=d.split('-');return p[2]+' '+NM2[parseInt(p[1])-1];};
+    const {ef,tc,si}=calcMetodos(vList);
+    const metrEl=document.getElementById("ventasMetrics");
+    if(metrEl)metrEl.innerHTML=
+      '<div class="metric"><div class="metric-lbl">Total '+fmtD(fecha)+' 📦</div><div class="metric-val">'+fmt(ef+tc+si)+'</div></div>'+
+      '<div class="metric"><div class="metric-lbl">Efectivo</div><div class="metric-val">'+fmt(ef)+'</div></div>'+
+      (tc?'<div class="metric"><div class="metric-lbl">Tarjeta</div><div class="metric-val">'+fmt(tc)+'</div></div>':'')+
+      (si?'<div class="metric"><div class="metric-lbl">SINPE</div><div class="metric-val">'+fmt(si)+'</div></div>':'');
+    const cardTitle=document.querySelector('#screen-ventas .section-title');
+    if(cardTitle)cardTitle.textContent='Ventas — '+fmtD(fecha)+' (archivo)';
+  });
+}
 function selVentaRow(poolIdx){
   const prev=document.querySelector('.tbl tbody tr.venta-sel');
   if(prev)prev.classList.remove('venta-sel');
@@ -2779,18 +2863,7 @@ function renderCierre(){
       (efNeto?row('Efectivo (neto)',efNeto):'')+
       (tc?row('Tarjeta',tc):'')+(si?row('SINPE',si):'')+
       row('SUMA',sumaNeta,{bold:true})
-    )+
-    // 6. DIFERENCIA
-    (function(){
-      const dif=sumaNeta-utilidad;
-      if(dif===0){
-        return'<div style="background:#E8F5E9;border:2px solid #1D9E75;border-radius:10px;padding:14px 16px;text-align:center;font-size:15px;font-weight:700;color:#085041;margin-bottom:10px">✓ CUADRA EXACTO</div>';
-      } else if(dif>0){
-        return'<div style="background:#EFF6FF;border:2px solid #3B82F6;border-radius:10px;padding:14px 16px;text-align:center;font-size:15px;font-weight:700;color:#1E40AF;margin-bottom:10px">SOBRÓ: +'+fmt(dif)+'</div>';
-      } else {
-        return'<div style="background:#FEE2E2;border:2px solid #EF4444;border-radius:10px;padding:14px 16px;text-align:center;font-size:15px;font-weight:700;color:#991B1B;margin-bottom:10px">FALTA: '+fmt(Math.abs(dif))+'</div>';
-      }
-    })()
+    )
   );
 
   box.innerHTML=boxHTML;
@@ -2988,23 +3061,33 @@ function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja){
     billetesCaja:{...cajaBilletes}
   };
   cierres.push(cierreData);
+  _archivarCierre(cierreData); // guardar cierre completo en archivo histórico (IndexedDB)
   ventas=[];gastos=[];cajaBilletes={};
   calCierresSelDia=hoy;
   calCierresMes=calCierresSelDia.slice(0,7);
-  saveLS();
+  const _guardadoOK=saveLS();
+  // Verificar que el cierre quedó realmente guardado en disco
+  if(_guardadoOK){
+    try{
+      const _ck=JSON.parse(localStorage.getItem('rpos_cierres')||'[]');
+      if(_ck.length<cierres.length){
+        alert('⚠️ ALERTA: El cierre se guardó en memoria pero NO en disco.\n\nHacé un RESPALDO INMEDIATO desde Menú → Exportar respaldo antes de cerrar el navegador o apagar la computadora.');
+      }
+    }catch(e){}
+  }
   renderCierre();
   enviarNotifCierre(cierreData,turnoNum);
+  // Mostrar botones de imprimir y continuar — el usuario elige cuándo seguir
   const _btnsEl=document.getElementById('cierreBtns');
   if(_btnsEl){
     const _cIdx=cierres.indexOf(cierreData);
-    _btnsEl.innerHTML='<button class="btn-sec" style="font-size:15px;padding:10px 22px;font-weight:700" onclick="printCierreReport(cierres['+_cIdx+'])">🖨 Imprimir cierre Turno '+turnoNum+'</button>';
+    const _printBtn='<button class="btn-green" style="font-size:15px;padding:10px 22px;font-weight:700" onclick="printCierreReport(cierres['+_cIdx+'])">&#128424; Imprimir cierre Turno '+turnoNum+'</button>';
+    const _nextBtn=esFinDia
+      ?'<button class="btn-sec" style="font-size:14px;padding:10px 20px" onclick="toast(\'✅ Día finalizado. ¡Hasta mañana! 🌙\');setTimeout(doLogout,1200)">&#10003; Finalizar día</button>'
+      :'<button class="btn-sec" style="font-size:14px;padding:10px 20px" onclick="localStorage.removeItem(\'rpos_cajaPedida\');showCajaInicialModal(true)">&#9654; Iniciar Turno 2</button>';
+    _btnsEl.innerHTML=_printBtn+' '+_nextBtn;
   }
-  if(esFinDia){
-    setTimeout(function(){toast('✅ Día finalizado. ¡Hasta mañana! 🌙');setTimeout(doLogout,1800);},600);
-  } else {
-    localStorage.removeItem('rpos_cajaPedida');
-    setTimeout(function(){showCajaInicialModal(true);},600);
-  }
+  toast('✅ Cierre Turno '+turnoNum+' guardado — imprimí el tiquete antes de continuar');
 }
 // printCierrePreview eliminado — ahora se usa printCierreReport directamente
 function probarNotifCierre(){
@@ -3160,6 +3243,25 @@ function reprintLastCierre(){
   }
 }
 function printCierreReport(c){
+  // Si el cierre tiene ventasList en memoria, imprimir directamente
+  if(c&&c.ventasList){
+    const body=buildCierreBodyHTML(c);
+    _lastCierreReportHTML=body;
+    _abrirImpresion(body,'Cierre');
+    return;
+  }
+  // El cierre fue purgado de localStorage (>7 días) — buscar en el archivo histórico
+  if(_archiveDB&&c){
+    toast('📦 Cargando detalle del archivo histórico…');
+    _buscarCierreArchivo(c.fechaISO,c.turno,function(cCompleto){
+      const cPrint=cCompleto||c; // si no está en IDB, imprimir resumen igual
+      const body=buildCierreBodyHTML(cPrint);
+      _lastCierreReportHTML=body;
+      _abrirImpresion(body,'Cierre');
+    });
+    return;
+  }
+  // Fallback: imprimir con datos de resumen aunque no tenga ventasList
   const body=buildCierreBodyHTML(c);
   _lastCierreReportHTML=body;
   _abrirImpresion(body,'Cierre');
@@ -3474,13 +3576,27 @@ function saveLS(){
   ventas=ventas.filter(v=>!v.fecha||v.fecha>=_co);
   gastos=gastos.filter(g=>!g.fecha||g.fecha>=_co);
   cierres=cierres.filter(c=>!c.fechaISO||c.fechaISO>=_co);
+
+  // Para reducir el tamaño en localStorage: los cierres de más de 7 días atrás
+  // se guardan solo con datos resumen (sin ventasList/gastosList que son muy pesados).
+  // En memoria se mantienen completos para la sesión actual.
+  const _hace7dias=localISO(new Date(Date.now()-7*24*60*60*1000));
+  const cierresParaGuardar=cierres.map(function(c){
+    if((c.fechaISO||'')>=_hace7dias)return c; // últimos 7 días: guardar completo
+    const{ventasList:_vl,gastosList:_gl,billetesCaja:_bc,...resumen}=c;
+    return resumen; // más viejo: solo resumen de números
+  });
+
   try{
+    // ⚠️ ORDEN CRÍTICO: guardar cierres ANTES que ventas.
+    // Si la luz se va a mitad del guardado, es mejor tener el cierre
+    // con ventas duplicadas (corregible) que ventas borradas sin cierre (pérdida).
+    localStorage.setItem('rpos_cierres',JSON.stringify(cierresParaGuardar));
+    localStorage.setItem('rpos_ventas',JSON.stringify(ventas));
+    localStorage.setItem('rpos_gastos',JSON.stringify(gastos));
     localStorage.setItem('rpos_users',JSON.stringify(users));
     localStorage.setItem('rpos_menu',JSON.stringify(menu));
     localStorage.setItem('rpos_cats',JSON.stringify(cats));
-    localStorage.setItem('rpos_ventas',JSON.stringify(ventas));
-    localStorage.setItem('rpos_gastos',JSON.stringify(gastos));
-    localStorage.setItem('rpos_cierres',JSON.stringify(cierres));
     localStorage.setItem('rpos_cajaBilletes',JSON.stringify(cajaBilletes));
     localStorage.setItem('rpos_cajainicial',cajainicial);
     localStorage.setItem('rpos_orders',JSON.stringify(orders));
@@ -3489,9 +3605,94 @@ function saveLS(){
     localStorage.setItem('rpos_nextUid',nextUid);
     localStorage.setItem('rpos_ticketConfig',JSON.stringify(ticketConfig));
     localStorage.setItem('rpos_mesas',JSON.stringify(mesas));
-
+    return true;
+  }catch(e){
+    // Error crítico: el localStorage está lleno o bloqueado
+    console.error('saveLS ERROR:',e);
+    setTimeout(function(){
+      toast('⚠️ ERROR AL GUARDAR: memoria llena. Hacé un respaldo en Menú → Respaldo ahora mismo.');
+    },0);
+    return false;
+  }
+}
+/* ══════════════════════════════════════════════════════════════════
+   ARCHIVO HISTÓRICO — IndexedDB
+   Almacenamiento ilimitado (cientos de MB) en la misma computadora.
+   - localStorage = cuaderno operativo del día (~5MB)
+   - IndexedDB    = archivo permanente sin límite práctico
+   Cada venta y cada cierre se guarda aquí al momento de registrarse.
+   Los datos NO se borran automáticamente (sobreviven el purge de 6 meses).
+══════════════════════════════════════════════════════════════════ */
+function _initArchivoHistorial(){
+  if(!window.indexedDB)return;
+  const req=indexedDB.open('rpos_historial_v1',1);
+  req.onupgradeneeded=function(e){
+    const db=e.target.result;
+    if(!db.objectStoreNames.contains('ventas')){
+      const vs=db.createObjectStore('ventas',{keyPath:'id'});
+      vs.createIndex('fecha','fecha',{unique:false});
+    }
+    if(!db.objectStoreNames.contains('cierres')){
+      db.createObjectStore('cierres',{keyPath:'_ckey'});
+    }
+  };
+  req.onsuccess=function(e){
+    _archiveDB=e.target.result;
+    _migrarAIDB();
+  };
+  req.onerror=function(){
+    // IndexedDB no disponible (modo incógnito muy restringido, etc.) — continuar sin archivo
+    console.warn('rpos: IndexedDB no disponible, usando solo localStorage');
+  };
+}
+// Migración única: pasar los datos ya existentes en localStorage al archivo histórico
+function _migrarAIDB(){
+  const MIG_KEY='rpos_idb_migrado_v1';
+  if(localStorage.getItem(MIG_KEY))return;
+  // Ventas del periodo actual
+  ventas.forEach(function(v){_archivarVenta(v);});
+  // Ventas de cierres guardados con ventasList
+  cierres.forEach(function(c){
+    if(c.ventasList)c.ventasList.forEach(function(v){_archivarVenta(v);});
+    _archivarCierre(c);
+  });
+  localStorage.setItem(MIG_KEY,'1');
+}
+// Guardar una venta en el archivo histórico (fire-and-forget)
+function _archivarVenta(v){
+  if(!_archiveDB||!v||v.id==null)return;
+  try{_archiveDB.transaction('ventas','readwrite').objectStore('ventas').put(v);}catch(e){}
+}
+// Guardar un cierre completo en el archivo histórico (fire-and-forget)
+function _archivarCierre(c){
+  if(!_archiveDB||!c)return;
+  try{
+    const obj=Object.assign({},c,{_ckey:(c.fechaISO||'?')+'_'+(c.turno||1)});
+    _archiveDB.transaction('cierres','readwrite').objectStore('cierres').put(obj);
   }catch(e){}
 }
+// Consultar ventas de una fecha específica en el archivo histórico
+function _buscarVentasArchivo(fecha,callback){
+  if(!_archiveDB){callback([]);return;}
+  try{
+    const tx=_archiveDB.transaction('ventas','readonly');
+    const req=tx.objectStore('ventas').index('fecha').getAll(IDBKeyRange.only(fecha));
+    req.onsuccess=function(){callback(req.result||[]);};
+    req.onerror=function(){callback([]);};
+  }catch(e){callback([]);}
+}
+// Consultar un cierre específico por fecha+turno en el archivo histórico
+function _buscarCierreArchivo(fechaISO,turno,callback){
+  if(!_archiveDB){callback(null);return;}
+  try{
+    const tx=_archiveDB.transaction('cierres','readonly');
+    const key=(fechaISO||'?')+'_'+(turno||1);
+    const req=tx.objectStore('cierres').get(key);
+    req.onsuccess=function(){callback(req.result||null);};
+    req.onerror=function(){callback(null);};
+  }catch(e){callback(null);}
+}
+
 /* ── RESPALDO ── */
 function checkAutoRespaldo(){
   const KEY='rpos_lastAutoRespaldo';
@@ -3648,6 +3849,8 @@ function enviarACocina(){
   toast('✅ Comanda enviada a cocina');
   closeMesa();
 }
+let _tabletSendQueue=[];  // pedidos pendientes de enviar cuando regrese internet
+
 function _enviarPedidoNtfy(mesaNombre,ord){
   const topic=(ticketConfig.tabletTopic||'').trim();
   if(!topic)return;
@@ -3655,18 +3858,31 @@ function _enviarPedidoNtfy(mesaNombre,ord){
   const total=ord.items.reduce(function(a,i){return a+i.price*i.qty;},0);
   const lineas=ord.items.map(function(i){return i.qty+'x '+i.name+(i.nota?' ('+i.nota+')':'');}).join('\n');
   const payload=JSON.stringify({
-    type:'pedido',
-    mesa:mesaNombre,
-    mesero:mesero,
-    ts:Date.now(),
-    items:ord.items.map(function(i){return{name:i.name,qty:i.qty,price:i.price,nota:i.nota||''};}),
-    total:total
+    type:'pedido',mesa:mesaNombre,mesero:mesero,ts:Date.now(),
+    items:ord.items.map(function(i){return{name:i.name,qty:i.qty,price:i.price,nota:i.nota||''};})
+    ,total:total
   });
-  // Mensaje silencioso — solo sirve para que la compu principal reciba la orden automáticamente
   const body=lineas+'\nTotal: '+fmt(total)+'\n||'+payload;
   const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1';
-  fetch(url,{method:'POST',body:body}).catch(function(){});
+  fetch(url,{method:'POST',body:body}).catch(function(){
+    // Sin internet: guardar en cola y reintentar cuando vuelva la conexión
+    _tabletSendQueue.push({url:url,body:body,ts:Date.now(),mesa:mesaNombre});
+    toast('📡 Sin internet — el pedido se guardó y se enviará cuando regrese la conexión');
+  });
 }
+// Cuando regresa el internet, reenviar cola automáticamente
+window.addEventListener('online',function(){
+  if(!_tabletSendQueue.length)return;
+  toast('📡 Internet restaurado — reenviando '+_tabletSendQueue.length+' pedido(s) pendiente(s)...');
+  const cola=[..._tabletSendQueue];
+  _tabletSendQueue=[];
+  cola.forEach(function(item){
+    if(Date.now()-item.ts>3600000)return; // descartar si tiene más de 1 hora
+    fetch(item.url,{method:'POST',body:item.body}).catch(function(){
+      _tabletSendQueue.push(item); // si falla de nuevo, volver a la cola
+    });
+  });
+});
 function probarNotifTablet(){
   const topic=(document.getElementById('tc-tablet-topic')?.value||ticketConfig.tabletTopic||'').trim();
   if(!topic){toast('Primero ingresá el tema tablet y guardá');return;}
@@ -3814,7 +4030,56 @@ function _resetInactivity(){
 
 /* ── INIT ── */
 try{
+// ── UNA SOLA VENTANA A LA VEZ ──
+// Usa sessionStorage (por pestaña) + localStorage (compartido) para detectar instancias duplicadas.
+// Si ya hay otra ventana activa, bloquea esta completamente.
+(function(){
+  const HB_KEY='rpos_tab_heartbeat'; // timestamp del último latido de la instancia activa
+  const ID_KEY='rpos_tab_id';        // ID único de la instancia activa
+  const MY_ID=Date.now()+'_'+Math.random(); // ID único para esta carga de página
+  // sessionStorage sobrevive recargas pero NO se comparte entre pestañas
+  const esRecarga=sessionStorage.getItem('rpos_my_tab_id');
+  if(!esRecarga){
+    // Primera vez que carga (no es recarga): asignar ID de sesión
+    sessionStorage.setItem('rpos_my_tab_id',MY_ID);
+  }
+  const miId=sessionStorage.getItem('rpos_my_tab_id');
+  const idActivo=localStorage.getItem(ID_KEY);
+  const hbActivo=parseInt(localStorage.getItem(HB_KEY)||'0');
+  const hayOtraInstancia=idActivo&&idActivo!==miId&&(Date.now()-hbActivo<12000);
+  if(hayOtraInstancia){
+    // Bloquear esta pestaña completamente
+    document.body.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f5f5f0;font-family:sans-serif;text-align:center;padding:24px">'
+      +'<div style="font-size:56px;margin-bottom:16px">🔒</div>'
+      +'<div style="font-size:22px;font-weight:700;color:#111;margin-bottom:10px">El POS ya está abierto</div>'
+      +'<div style="font-size:15px;color:#555;max-width:380px;line-height:1.6;margin-bottom:28px">El sistema ya está en uso en otra ventana o pestaña.<br>Para evitar pérdida de datos, solo puede estar abierto en un lugar a la vez.</div>'
+      +'<div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">'
+      +'<button onclick="location.reload()" style="padding:12px 24px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;cursor:pointer;font-weight:600">↺ Verificar de nuevo</button>'
+      +'<button onclick="_tomarControl()" style="padding:12px 24px;border-radius:10px;border:none;background:#1D9E75;color:#fff;font-size:14px;cursor:pointer;font-weight:700">✓ Usar en esta ventana</button>'
+      +'</div>'
+      +'<div style="font-size:12px;color:#aaa;margin-top:20px">Cerrá la otra pestaña/ventana y hacé clic en "Verificar de nuevo"</div>'
+    +'</div>';
+    window._tomarControl=function(){
+      localStorage.setItem(ID_KEY,miId);
+      localStorage.setItem(HB_KEY,Date.now());
+      location.reload();
+    };
+    throw new Error('POS_BLOCKED_DUPLICATE_TAB'); // detiene el resto del init
+  }
+  // Esta instancia es la activa — registrar y empezar heartbeat
+  localStorage.setItem(ID_KEY,miId);
+  localStorage.setItem(HB_KEY,Date.now());
+  setInterval(function(){localStorage.setItem(HB_KEY,Date.now());},5000);
+  // Limpiar al cerrar
+  window.addEventListener('beforeunload',function(){
+    if(localStorage.getItem(ID_KEY)===miId){
+      localStorage.removeItem(ID_KEY);
+      localStorage.removeItem(HB_KEY);
+    }
+  });
+})();
 loadLS();
+_initArchivoHistorial(); // iniciar archivo histórico en IndexedDB (después de loadLS para migrar datos existentes)
 ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(b)b.style.display="none";});
 if(TABLET_MODE){
   document.querySelector('.topnav h1').innerHTML='&#127799; Soda El Tucan <span style="font-size:11px;background:#E1F5EE;color:#085041;padding:2px 10px;border-radius:20px;font-weight:600;margin-left:6px">&#128241; Modo Mesero</span>';
