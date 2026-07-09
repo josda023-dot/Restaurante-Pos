@@ -369,11 +369,9 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
           <button class="btn-green" onclick="saveTicketConfig()">&#10003; Guardar cambios</button>
         </div>
         <div class="card" style="margin-top:16px">
-          <div class="section-title">&#128276; Notificaciones</div>
-          <div class="form-row"><div style="flex:1"><label>Tema ntfy (cierres)</label><input class="fi" id="tc-ntfy" placeholder="ej: soda-tucan-daniel"></div></div>
-          <div class="form-row" style="margin-top:8px"><div style="flex:1"><label>&#128203; Canal tablet → compu (sincronización)</label><input class="fi" id="tc-tablet-topic" placeholder="ej: soda-tucan-tablet-sync"><div style="font-size:11px;color:#888;margin-top:3px">Nombre único para sincronizar pedidos de la tablet con la compu principal. No es una notificación al celular — es el canal interno entre los dos equipos (requiere internet en ambos).</div></div></div>
+          <div class="section-title">&#128203; Sincronización Tablet</div>
+          <div class="form-row"><div style="flex:1"><label>&#128203; Canal tablet → compu</label><input class="fi" id="tc-tablet-topic" placeholder="ej: soda-tucan-tablet-sync"><div style="font-size:11px;color:#888;margin-top:3px">Nombre único para sincronizar pedidos de la tablet con la compu principal. Requiere internet en ambos equipos.</div></div></div>
           <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="btn-sec" onclick="probarNotifCierre()">&#128172; Probar cierre</button>
             <button class="btn-sec" onclick="probarNotifTablet()">&#128203; Probar sync tablet</button>
             <button class="btn-green" onclick="saveTicketConfig()">&#10003; Guardar</button>
           </div>
@@ -676,7 +674,7 @@ let cobraItbis=true,cobraServicio=false;
 let tipoCambio=parseInt(localStorage.getItem('rpos_tipoCambio'))||530; // colones por dólar
 let efModoUSD=false; // efectivo modal en modo dólares
 let efDolaresAmt=''; // monto ingresado en dólares
-let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false,ntfyTopic:'',tabletTopic:''};
+let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false,tabletTopic:''};
 let _tabletSSE=null;            // EventSource SSE para pedidos tablet en tiempo real
 let _tabletPollInterval=null;   // setInterval fallback si SSE falla
 let _tabletPedidosVistos=new Set(); // dedup de pedidos ya procesados (ts|mesa)
@@ -820,11 +818,12 @@ function verifyLogin(){
     _resetInactivity();
     if(!TABLET_MODE)_iniciarPollTablet();
     updateNav();
+    // Cerrar automáticamente días anteriores sin cierre (antes de mostrar la caja)
+    _verificarCierreAutomatico();
     goScreen(u.role==="admin"?"salon":(u.allowedScreens[0]||"salon"));
     renderSalon();
     if(u.role==="admin")setTimeout(checkAutoRespaldo,1500);
-    // Preguntar caja inicial al arrancar el sistema (solo la primera vez por sesión)
-    // Preguntar caja inicial solo la primera vez del día (sobrevive recargas de página)
+    // Preguntar caja inicial al arrancar el sistema (solo la primera vez del día)
     const _hoy=localISO();
     if(localStorage.getItem('rpos_cajaPedida')!==_hoy){
       localStorage.setItem('rpos_cajaPedida',_hoy);
@@ -2869,7 +2868,9 @@ function renderCierre(){
   box.innerHTML=boxHTML;
   if(btns){
     if(!diaTerminado){
-      btns.innerHTML='<button class="btn-green" style="font-size:15px;padding:10px 22px" onclick="hacerCierre()">✓ Confirmar cierre</button>';
+      btns.innerHTML=
+        '<button class="btn-sec" style="font-size:14px;padding:10px 18px" onclick="printCierreBorrador()">🖨 Imprimir borrador</button> '+
+        '<button class="btn-green" style="font-size:15px;padding:10px 22px;margin-left:6px" onclick="hacerCierre()">✓ Confirmar cierre</button>';
     } else {
       btns.innerHTML='';
     }
@@ -2945,6 +2946,29 @@ function renderCierre(){
   }
 }
 let _cierreEnProceso=false;
+
+// Imprime el cierre como borrador (sin confirmar) para revisar antes de confirmar
+function printCierreBorrador(){
+  const {ef,tc,si}=calcMetodos(ventas);
+  const gastoCaja=gastos.filter(function(g){return g.tipo==='caja';}).reduce(function(a,g){return a+g.monto;},0);
+  const gastoFuerte=gastos.filter(function(g){return g.tipo==='fuerte';}).reduce(function(a,g){return a+g.monto;},0);
+  const gastoSinpe=gastos.filter(function(g){return g.tipo==='sinpe';}).reduce(function(a,g){return a+g.monto;},0);
+  const gastoTransf=gastos.filter(function(g){return g.tipo==='transf';}).reduce(function(a,g){return a+g.monto;},0);
+  const totalVentas=ef+tc+si;const efNeto=ef-gastoCaja;
+  const efEnCaja=cajainicial+efNeto;const utilidad=efNeto+tc+si;
+  const d=new Date();const pad=function(n){return String(n).padStart(2,'0');};
+  const turnoNum=cierres.filter(function(c){return c.fechaISO===localISO();}).length+1;
+  const cBorrador={
+    fecha:'★ BORRADOR ★ — '+pad(d.getDate())+'/'+(pad(d.getMonth()+1))+'/'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes()),
+    fechaISO:localISO(),turno:turnoNum,numVentas:ventas.length,
+    ef,tc,si,totalVentas,gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
+    efNeto,efEnCaja,cajainicial,utilidad,
+    conteoFisico:null,diferenciaCaja:null,
+    ventasList:[...ventas],gastosList:[...gastos]
+  };
+  _abrirImpresion(buildCierreBodyHTML(cBorrador),'Borrador Cierre');
+}
+
 function hacerCierre(){
   if(_cierreEnProceso)return;
   const hoy=localISO();
@@ -2952,12 +2976,10 @@ function hacerCierre(){
   if(cierresHoy>=2){toast('Ya se realizaron los 2 cierres del día de hoy');return;}
   const esFinDia=cierresHoy===1;
   const turnoNum=cierresHoy+1;
-  // Calcular lo que el sistema espera en caja
   const {ef,tc,si}=calcMetodos(ventas);
   const gastoCaja=gastos.filter(function(g){return g.tipo==='caja';}).reduce(function(a,g){return a+g.monto;},0);
   const efNeto=ef-gastoCaja;
   const efEnCaja=cajainicial+efNeto;
-  // Mostrar modal de conteo físico
   _showConteoCajaModal(turnoNum,esFinDia,efEnCaja,ef,gastoCaja);
 }
 
@@ -2966,41 +2988,27 @@ function _showConteoCajaModal(turnoNum,esFinDia,efEnCaja,efVentas,gastoCaja){
   const div=document.createElement('div');
   div.id='conteoCajaModal';
   div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px';
-  div.innerHTML=`
-    <div style="background:#fff;border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.35)">
-      <div style="font-size:18px;font-weight:800;color:#111;margin-bottom:4px">💵 Conteo de caja — Turno ${turnoNum}</div>
-      <div style="font-size:13px;color:#666;margin-bottom:20px">${esFinDia?'Cierre final del día':'Cierre de turno'}</div>
-      <div style="background:#f5f5f0;border-radius:10px;padding:14px;margin-bottom:16px;font-size:14px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="color:#555">Caja inicial:</span>
-          <span style="font-weight:600">${fmt(cajainicial||0)}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="color:#555">Ventas en efectivo:</span>
-          <span style="font-weight:600">${fmt(efVentas)}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="color:#555">Gastos de caja:</span>
-          <span style="font-weight:600;color:#E24B4A">- ${fmt(gastoCaja)}</span>
-        </div>
-        <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
-        <div style="display:flex;justify-content:space-between">
-          <span style="color:#085041;font-weight:700">Sistema espera en caja:</span>
-          <span style="font-weight:800;color:#085041">${fmt(efEnCaja)}</span>
-        </div>
-      </div>
-      <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px">¿Cuánto hay físicamente en caja ahora?</label>
-      <input type="number" id="conteoFisicoInput" min="0" inputmode="decimal" placeholder="Ej: ${Math.round(efEnCaja/1000)*1000}"
-        style="width:100%;border:2px solid #1D9E75;border-radius:10px;padding:14px;font-size:22px;text-align:center;font-weight:700;color:#085041;outline:none;box-sizing:border-box;margin-bottom:12px"
-        oninput="_actualizarDiferencia(${efEnCaja})">
-      <div id="conteoResultado" style="border-radius:10px;padding:12px;text-align:center;font-size:15px;font-weight:700;margin-bottom:18px;display:none"></div>
-      <div style="display:flex;gap:10px">
-        <button onclick="document.getElementById('conteoCajaModal').remove()"
-          style="flex:1;padding:12px;border-radius:8px;border:1px solid #ddd;background:#f5f5f0;font-size:14px;cursor:pointer">✕ Cancelar</button>
-        <button id="btnConfirmarCierreConteo" onclick="_confirmarCierreConConteo(${turnoNum},${esFinDia},${efEnCaja})"
-          style="flex:2;padding:12px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar cierre</button>
-      </div>
-    </div>`;
+  div.innerHTML=
+    '<div style="background:#fff;border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.35)">'+
+      '<div style="font-size:18px;font-weight:800;color:#111;margin-bottom:4px">💵 Conteo de caja — Turno '+turnoNum+'</div>'+
+      '<div style="font-size:13px;color:#666;margin-bottom:20px">'+(esFinDia?'Cierre final del día':'Cierre de turno')+'</div>'+
+      '<div style="background:#f5f5f0;border-radius:10px;padding:14px;margin-bottom:16px;font-size:14px">'+
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#555">Caja inicial:</span><span style="font-weight:600">'+fmt(cajainicial||0)+'</span></div>'+
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#555">Ventas en efectivo:</span><span style="font-weight:600">'+fmt(efVentas)+'</span></div>'+
+        (gastoCaja?'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#555">Gastos de caja:</span><span style="font-weight:600;color:#E24B4A">- '+fmt(gastoCaja)+'</span></div>':'')+
+        '<hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">'+
+        '<div style="display:flex;justify-content:space-between"><span style="color:#085041;font-weight:700">Sistema espera en caja:</span><span style="font-weight:800;color:#085041;font-size:16px">'+fmt(efEnCaja)+'</span></div>'+
+      '</div>'+
+      '<label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px">¿Cuánto hay físicamente en caja ahora?</label>'+
+      '<input type="number" id="conteoFisicoInput" min="0" inputmode="decimal" placeholder="Ej: '+Math.round(efEnCaja/1000)*1000+'"'+
+        ' style="width:100%;border:2px solid #1D9E75;border-radius:10px;padding:14px;font-size:22px;text-align:center;font-weight:700;color:#085041;outline:none;box-sizing:border-box;margin-bottom:12px"'+
+        ' oninput="_actualizarDiferencia('+efEnCaja+')">'+
+      '<div id="conteoResultado" style="border-radius:10px;padding:12px;text-align:center;font-size:15px;font-weight:700;margin-bottom:18px;display:none"></div>'+
+      '<div style="display:flex;gap:10px">'+
+        '<button onclick="document.getElementById(\'conteoCajaModal\').remove()" style="flex:1;padding:12px;border-radius:8px;border:1px solid #ddd;background:#f5f5f0;font-size:14px;cursor:pointer">✕ Cancelar</button>'+
+        '<button onclick="_confirmarCierreConConteo('+turnoNum+','+esFinDia+','+efEnCaja+')" style="flex:2;padding:12px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar cierre</button>'+
+      '</div>'+
+    '</div>';
   document.body.appendChild(div);
   setTimeout(function(){const inp=document.getElementById('conteoFisicoInput');if(inp)inp.focus();},100);
 }
@@ -3013,25 +3021,16 @@ function _actualizarDiferencia(efEnCaja){
   if(isNaN(val)||inp.value===''){res.style.display='none';return;}
   const dif=Math.round(val)-Math.round(efEnCaja);
   res.style.display='block';
-  if(dif===0){
-    res.style.background='#E1F5EE';res.style.color='#085041';
-    res.innerHTML='✓ CUADRA EXACTO';
-  } else if(dif>0){
-    res.style.background='#FFF8E1';res.style.color='#92400E';
-    res.innerHTML='SOBRA: +'+fmt(dif)+' (hay más de lo esperado)';
-  } else {
-    res.style.background='#FFF1F0';res.style.color='#991B1B';
-    res.innerHTML='FALTA: '+fmt(Math.abs(dif))+' (hay menos de lo esperado)';
-  }
+  if(dif===0){res.style.background='#E1F5EE';res.style.color='#085041';res.innerHTML='✓ CUADRA EXACTO';}
+  else if(dif>0){res.style.background='#FFF8E1';res.style.color='#92400E';res.innerHTML='SOBRA: +'+fmt(dif);}
+  else{res.style.background='#FFF1F0';res.style.color='#991B1B';res.innerHTML='FALTA: '+fmt(Math.abs(dif));}
 }
 
 function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja){
   const inp=document.getElementById('conteoFisicoInput');
   const conteoFisico=inp?Math.round(parseFloat(inp.value)||0):null;
   if(conteoFisico===null||inp.value===''){
-    toast('Ingresá el monto físico en caja');
-    if(inp)inp.focus();
-    return;
+    toast('Ingresá el monto físico en caja');if(inp)inp.focus();return;
   }
   const diferenciaCaja=conteoFisico-Math.round(efEnCaja);
   const old=document.getElementById('conteoCajaModal');if(old)old.remove();
@@ -3053,20 +3052,17 @@ function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja){
     numVentas:ventas.length,
     ef,tc,si,totalVentas,
     gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
-    efNeto,efEnCaja,cajainicial,
-    utilidad,
+    efNeto,efEnCaja,cajainicial,utilidad,
     conteoFisico,diferenciaCaja,
-    ventasList:[...ventas],
-    gastosList:[...gastos],
+    ventasList:[...ventas],gastosList:[...gastos],
     billetesCaja:{...cajaBilletes}
   };
   cierres.push(cierreData);
-  _archivarCierre(cierreData); // guardar cierre completo en archivo histórico (IndexedDB)
+  _archivarCierre(cierreData);
   ventas=[];gastos=[];cajaBilletes={};
   calCierresSelDia=hoy;
   calCierresMes=calCierresSelDia.slice(0,7);
   const _guardadoOK=saveLS();
-  // Verificar que el cierre quedó realmente guardado en disco
   if(_guardadoOK){
     try{
       const _ck=JSON.parse(localStorage.getItem('rpos_cierres')||'[]');
@@ -3076,93 +3072,123 @@ function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja){
     }catch(e){}
   }
   renderCierre();
-  enviarNotifCierre(cierreData,turnoNum);
-  // Mostrar botones de imprimir y continuar — el usuario elige cuándo seguir
-  const _btnsEl=document.getElementById('cierreBtns');
-  if(_btnsEl){
-    const _cIdx=cierres.indexOf(cierreData);
-    const _printBtn='<button class="btn-green" style="font-size:15px;padding:10px 22px;font-weight:700" onclick="printCierreReport(cierres['+_cIdx+'])">&#128424; Imprimir cierre Turno '+turnoNum+'</button>';
-    const _nextBtn=esFinDia
-      ?'<button class="btn-sec" style="font-size:14px;padding:10px 20px" onclick="toast(\'✅ Día finalizado. ¡Hasta mañana! 🌙\');setTimeout(doLogout,1200)">&#10003; Finalizar día</button>'
-      :'<button class="btn-sec" style="font-size:14px;padding:10px 20px" onclick="localStorage.removeItem(\'rpos_cajaPedida\');showCajaInicialModal(true)">&#9654; Iniciar Turno 2</button>';
-    _btnsEl.innerHTML=_printBtn+' '+_nextBtn;
-  }
-  toast('✅ Cierre Turno '+turnoNum+' guardado — imprimí el tiquete antes de continuar');
+  _showResultadoCierreModal(cierreData,turnoNum,esFinDia);
 }
-// printCierrePreview eliminado — ahora se usa printCierreReport directamente
-function probarNotifCierre(){
-  const topic=(document.getElementById('tc-ntfy')?.value||ticketConfig.ntfyTopic||'').trim();
-  if(!topic){toast('Primero ingresá el nombre del tema ntfy');return;}
-  const nombre=ticketConfig.nombre||'POS';
-  const titulo=encodeURIComponent(nombre+' — Prueba de notificación');
-  const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?title='+titulo+'&priority=3&tags=white_check_mark';
-  fetch(url,{method:'POST',body:'¡Las notificaciones de cierre están funcionando! 🎉\nSoda El Tucan POS está configurado correctamente.'})
-    .then(function(r){
-      if(r.ok){toast('✓ Notificación enviada — revisá tu celular');}
-      else{toast('Error '+r.status+' — revisá el nombre del tema');}
-    })
-    .catch(function(e){toast('No se pudo conectar a ntfy.sh — verificá internet');});
-}
-function enviarNotifCierre(c,turno){
-  const topic=(ticketConfig.ntfyTopic||'').trim();
-  if(!topic)return;
-  const nombre=ticketConfig.nombre||'POS';
-  const f=function(n){return'₡'+Math.round(n||0).toLocaleString('es-CR');};
-  const ln=function(l,r){return l+(r!==undefined?'  '+r:'');};
-  const sep='─────────────────';
-  const gastoCaja=c.gastoCaja||0;
-  const gastoExt=(c.gastoFuerte||0)+(c.gastoSinpe||0)+(c.gastoTransf||0);
-  const totalVentas=c.totalVentas||0;
-  const ef=c.ef||0;const tc=c.tc||0;const si=c.si||0;
-  const utilidad=totalVentas-gastoCaja;
-  const efNeto=ef-gastoCaja;
-  const sumaNeta=efNeto+tc+si;
-  const diferencia=sumaNeta-utilidad;
-  const tipoLabel=function(t){return t==='fuerte'?'C.Fuerte':t==='sinpe'?'SINPE':t==='transf'?'Transf':'';};
-  const gastosExt=(c.gastosList||[]).filter(function(g){return g.tipo!=='caja';});
-  const gastosCaja=(c.gastosList||[]).filter(function(g){return g.tipo==='caja';});
-  let difLabel=diferencia===0?'✓ CUADRA EXACTO':diferencia>0?'SOBRÓ: +'+f(diferencia):'FALTA: '+f(Math.abs(diferencia));
 
-  const lines=[
-    '★ CIERRE DEL DÍA ★',
-    c.fecha+' — Turno '+turno,
-    (c.numVentas||0)+' orden'+(c.numVentas!==1?'es':'')+' atendida'+(c.numVentas!==1?'s':''),
-    sep,
-    'GASTOS EXTERNOS',
-    ...(gastosExt.length?gastosExt.map(function(g){return ln('  '+g.desc+' ['+tipoLabel(g.tipo)+']',f(g.monto));}):['  Sin gastos externos']),
-    ...(gastoExt?[ln('Total externos:',f(gastoExt))]:[]),
-    sep,
-    'GASTOS DE CAJA',
-    ...(gastosCaja.length?gastosCaja.map(function(g){return ln('  '+g.desc,f(g.monto));}):['  Sin gastos de caja']),
-    ...(gastoCaja?[ln('Total gastos caja:',f(gastoCaja))]:[]),
-    sep,
-    'VENTAS DEL DÍA',
-    ln('Total ventas:',f(totalVentas)),
-    ...(gastoCaja?[ln('Gastos de caja:','- '+f(gastoCaja))]:[]),
-    ln('UTILIDAD:',f(utilidad)),
-    sep,
-    ...((c.cajainicial!==undefined&&c.cajainicial!==null)?[
-      'EFECTIVO EN CAJA',
-      ln('Caja inicial:',f(c.cajainicial||0)),
-      ...(ef?[ln('Ventas efectivo:',f(ef))]:[]),
-      ...(gastoCaja?[ln('Gastos de caja:','- '+f(gastoCaja))]:[]),
-      ln('Efectivo en caja:',f(c.efEnCaja!==undefined?c.efEnCaja:(c.cajainicial||0)+ef-gastoCaja)),
-      sep,
-    ]:[]),
-    'MÉTODO DE COBRO',
-    ...(efNeto?[ln('Efectivo (neto):',f(efNeto))]:[]),
-    ...(tc?[ln('Tarjeta:',f(tc))]:[]),
-    ...(si?[ln('SINPE:',f(si))]:[]),
-    ln('SUMA:',f(sumaNeta)),
-    sep,
-    difLabel,
-    '* * * FIN DEL CIERRE * * *'
-  ].join('\n');
-  const tituloC=encodeURIComponent(nombre+' — Cierre Turno '+turno);
-  const urlC='https://ntfy.sh/'+encodeURIComponent(topic)+'?title='+tituloC+'&priority=3&tags=white_check_mark,moneybag';
-  fetch(urlC,{method:'POST',body:lines}).catch(function(){});
+// Modal DESPUÉS de confirmar: muestra efectivo esperado, resultado del conteo y próximo paso
+function _showResultadoCierreModal(c,turnoNum,esFinDia){
+  const old=document.getElementById('resultadoCierreModal');if(old)old.remove();
+  const cIdx=cierres.indexOf(c);
+  const dif=c.diferenciaCaja||0;
+  const difColor=dif===0?'#085041':dif>0?'#92400E':'#991B1B';
+  const difBg=dif===0?'#E1F5EE':dif>0?'#FFF8E1':'#FFF1F0';
+  const difLabel=dif===0?'✓ CUADRA EXACTO':dif>0?'SOBRA: +'+fmt(dif):'FALTA: '+fmt(Math.abs(dif));
+  const nextLabel=esFinDia?'🌙 Finalizar día':'▶ Iniciar Turno 2';
+  const nextAction=esFinDia
+    ?'document.getElementById(\'resultadoCierreModal\').remove();toast(\'✅ Día finalizado. ¡Hasta mañana! 🌙\');setTimeout(doLogout,1200)'
+    :'document.getElementById(\'resultadoCierreModal\').remove();localStorage.removeItem(\'rpos_cajaPedida\');showCajaInicialModal(true)';
+  const div=document.createElement('div');
+  div.id='resultadoCierreModal';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px';
+  div.innerHTML=
+    '<div style="background:#fff;border-radius:16px;padding:28px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.35)">'+
+      '<div style="text-align:center;margin-bottom:18px">'+
+        '<div style="font-size:40px;margin-bottom:6px">✅</div>'+
+        '<div style="font-size:18px;font-weight:800;color:#085041">Cierre Turno '+turnoNum+' guardado</div>'+
+        '<div style="font-size:12px;color:#888;margin-top:3px">'+c.fecha+'</div>'+
+      '</div>'+
+      // Efectivo esperado
+      '<div style="background:#E8F5E9;border:2px solid #1D9E75;border-radius:12px;padding:16px;margin-bottom:10px">'+
+        '<div style="font-size:11px;font-weight:700;color:#085041;letter-spacing:.5px;margin-bottom:6px">EL SISTEMA ESPERA EN CAJA</div>'+
+        '<div style="font-size:30px;font-weight:800;color:#085041;margin-bottom:4px">'+fmt(c.efEnCaja||0)+'</div>'+
+        '<div style="font-size:12px;color:#5a8a6a">Caja inicial '+fmt(c.cajainicial||0)+(c.efNeto?' + efectivo neto '+fmt(c.efNeto):'')+'</div>'+
+      '</div>'+
+      // Resultado del conteo físico
+      (c.conteoFisico!=null?
+        '<div style="background:'+difBg+';border-radius:10px;padding:14px;margin-bottom:14px">'+
+          '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:#555">Conteo físico:</span><span style="font-weight:700">'+fmt(c.conteoFisico)+'</span></div>'+
+          '<div style="font-size:15px;font-weight:800;text-align:center;margin-top:8px;color:'+difColor+'">'+difLabel+'</div>'+
+        '</div>'
+      :'')+
+      '<button onclick="printCierreReport(cierres['+cIdx+'])" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ccc;background:#f5f5f0;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">🖨 Imprimir cierre Turno '+turnoNum+'</button>'+
+      '<button onclick="'+nextAction+'" style="width:100%;padding:14px;border-radius:10px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">'+nextLabel+'</button>'+
+    '</div>';
+  document.body.appendChild(div);
 }
 function totalCajainicial(){return cajainicial;}
+
+/* ══════════════════════════════════════════════════════════════
+   AUTO-CIERRE AL CAMBIO DE DÍA
+   Si el sistema quedó abierto de un día para otro sin hacer cierre,
+   al iniciar sesión esta función detecta las ventas/gastos del día
+   anterior y los cierra automáticamente para que no se mezclen
+   con el nuevo día.
+══════════════════════════════════════════════════════════════ */
+function _verificarCierreAutomatico(){
+  const hoy=localISO();
+  // Buscar ventas o gastos registrados antes de hoy
+  const diasViejos=new Set([
+    ...ventas.filter(function(v){return v.fecha&&v.fecha<hoy;}).map(function(v){return v.fecha;}),
+    ...gastos.filter(function(g){return g.fecha&&g.fecha<hoy;}).map(function(g){return g.fecha;})
+  ]);
+  if(!diasViejos.size)return; // todo está en regla, nada que hacer
+
+  const diasOrdenados=[...diasViejos].sort();
+  let cierresCreados=0;
+
+  diasOrdenados.forEach(function(fecha){
+    const vDia=ventas.filter(function(v){return v.fecha===fecha;});
+    const gDia=gastos.filter(function(g){return g.fecha===fecha;});
+    if(!vDia.length&&!gDia.length)return;
+
+    // Número de turno según cuántos cierres ya existen para ese día
+    const turnoNum=cierres.filter(function(c){return c.fechaISO===fecha;}).length+1;
+
+    // Calcular totales del día
+    const {ef,tc,si}=calcMetodos(vDia);
+    const gastoCaja=gDia.filter(function(g){return g.tipo==='caja';}).reduce(function(a,g){return a+g.monto;},0);
+    const gastoFuerte=gDia.filter(function(g){return g.tipo==='fuerte';}).reduce(function(a,g){return a+g.monto;},0);
+    const gastoSinpe=gDia.filter(function(g){return g.tipo==='sinpe';}).reduce(function(a,g){return a+g.monto;},0);
+    const gastoTransf=gDia.filter(function(g){return g.tipo==='transf';}).reduce(function(a,g){return a+g.monto;},0);
+    const totalVentas=ef+tc+si;
+    const efNeto=ef-gastoCaja;
+    const utilidad=efNeto+tc+si;
+    const pad=function(n){return String(n).padStart(2,'0');};
+    const d=new Date(fecha+'T12:00:00');
+    const fechaStr=pad(d.getDate())+'/'+(pad(d.getMonth()+1))+'/'+d.getFullYear()+' (cierre automático)';
+
+    const cierreAuto={
+      fecha:fechaStr,fechaISO:fecha,turno:turnoNum,
+      numVentas:vDia.length,
+      ef,tc,si,totalVentas,
+      gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
+      efNeto,efEnCaja:(cajainicial||0)+efNeto,cajainicial:cajainicial||0,
+      utilidad,
+      conteoFisico:null,diferenciaCaja:null,
+      ventasList:[...vDia],gastosList:[...gDia],
+      billetesCaja:{...cajaBilletes},
+      _autoCierre:true
+    };
+
+    cierres.push(cierreAuto);
+    _archivarCierre(cierreAuto);
+
+    // Remover del periodo activo
+    ventas=ventas.filter(function(v){return v.fecha!==fecha;});
+    gastos=gastos.filter(function(g){return g.fecha!==fecha;});
+    cierresCreados++;
+  });
+
+  if(cierresCreados>0){
+    cajaBilletes={};
+    cajainicial=0;
+    localStorage.removeItem('rpos_cajaPedida'); // pedir caja al iniciar el nuevo día
+    saveLS();
+    const dias=diasOrdenados.join(', ');
+    toast('📅 Se cerraron automáticamente los días anteriores sin cierre ('+dias+'). Datos guardados en el historial.');
+  }
+}
+
 // Todas las ventas históricas (cierres pasados) + periodo actual
 function allVentasHist(){return cierres.reduce(function(arr,c){return arr.concat(c.ventasList||[]);},[]
 ).concat(ventas);}
@@ -3540,7 +3566,6 @@ function renderTicketConfig(){
   const fi=document.getElementById("tc-itbis");if(fi)fi.checked=tc.defaultItbis!==false;
   const fs2=document.getElementById("tc-servicio");if(fs2)fs2.checked=tc.defaultServicio===true;
   const fe=document.getElementById("tc-empleado");if(fe)fe.checked=tc.mostrarEmpleado!==false;
-  const fn2=document.getElementById("tc-ntfy");if(fn2)fn2.value=tc.ntfyTopic||'';
   const ftt=document.getElementById("tc-tablet-topic");if(ftt)ftt.value=tc.tabletTopic||'';
   renderTicketPreview();
 }
@@ -3553,7 +3578,6 @@ function saveTicketConfig(){
   ticketConfig.defaultItbis=document.getElementById("tc-itbis")?.checked!==false;
   ticketConfig.defaultServicio=document.getElementById("tc-servicio")?.checked===true;
   ticketConfig.mostrarEmpleado=document.getElementById("tc-empleado")?.checked!==false;
-  ticketConfig.ntfyTopic=document.getElementById("tc-ntfy")?.value.trim()||'';
   ticketConfig.tabletTopic=document.getElementById("tc-tablet-topic")?.value.trim()||'';
   saveLS();renderTicketPreview();toast("\u2713 Configuraci\u00f3n guardada");
 }
