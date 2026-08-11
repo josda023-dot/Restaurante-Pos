@@ -2765,14 +2765,51 @@ function buildCierreBodyHTML(c){
       })()+
       '<hr class="ticket-hr-solid">'
     ):'')+
-    '<div class="ticket-center" style="font-weight:800;font-size:15px;padding:3px 0">'+difLabel+'</div>'+
-    '<hr class="ticket-hr-solid">'+
+    (c.datFono!=null?(
+      '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">VERIFICACIÓN DATAFONO</div>'+
+      row('Sistema registró:',fmt2(c.tc||0))+
+      row('Datafono reporta:',fmt2(c.datFono))+
+      '<hr class="ticket-hr-dash">'+
+      (function(){
+        const dif=c.diferenciaTarjeta||0;
+        const label=dif===0?'✓ CUADRA CON SISTEMA':dif>0?'DATAFONO +'+fmt2(dif):'FALTA EN DATAFONO: '+fmt2(Math.abs(dif));
+        return'<div class="ticket-bold" style="'+(dif!==0?'color:'+(dif>0?'#92400E':'#991B1B'):'')+';"><span>DIFERENCIA:</span><span>'+label+'</span></div>';
+      })()+
+      '<hr class="ticket-hr-solid">'
+    ):'')+
+    (c.conteoFisico!=null?(function(){
+      const dC=c.diferenciaCaja||0;
+      const dT=(c.datFono!=null)?(c.diferenciaTarjeta||0):null;
+      const total=dC+(dT!=null?dT:0);
+      const hasBoth=dT!=null;
+      if(!hasBoth&&dC===0)return'';
+      let totalLabel;
+      if(total===0){totalLabel='✓ UTILIDAD CUADRA EN TOTAL';}
+      else if(total>0){totalLabel='SOBRA EN UTILIDAD: +'+fmt2(total);}
+      else{totalLabel='FALTA EN UTILIDAD: '+fmt2(Math.abs(total));}
+      let nota='';
+      if(hasBoth&&dC!==0&&dT!==0&&Math.sign(dC)!==Math.sign(dT)){
+        nota='<div class="ticket-center" style="font-size:11px">'+(total===0?'Diferencias se compensan — posible metodo incorrecto':'Diferencias se compensan parcialmente')+'</div>';
+      }
+      return'<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">IMPACTO NETO EN UTILIDAD</div>'+
+        (hasBoth?row('Ef. diferencia:',dC===0?'—':dC>0?'+'+fmt2(dC):fmt2(dC)):'')+
+        (hasBoth&&dT!=null?row('Tarj. diferencia:',dT===0?'—':dT>0?'+'+fmt2(dT):fmt2(dT)):'')+
+        (hasBoth?'<hr class="ticket-hr-dash">':'')+
+        '<div class="ticket-bold" style="'+(total!==0?'color:'+(total>0?'#92400E':'#991B1B'):'')+';"><span>NETO:</span><span>'+totalLabel+'</span></div>'+
+        nota+
+        '<hr class="ticket-hr-solid">';
+    })():'')+
     '<div class="ticket-center" style="font-size:12px;margin-top:5px">* * * FIN DEL CIERRE * * *</div>'
   );
 }
 
 function renderCierre(){
   const hoy=localISO();
+  // Auto-seleccionar hoy en el calendario si hay cierres hoy y no hay día seleccionado
+  if(!calCierresSelDia&&cierres.some(function(c){return c.fechaISO===hoy;})){
+    calCierresSelDia=hoy;
+    calCierresMes=hoy.slice(0,7);
+  }
   const cierresHoy=cierres.filter(function(c){return c.fechaISO===hoy;});
   const turnoNum=cierresHoy.length+1;
   const diaTerminado=cierresHoy.length>=2;
@@ -2934,6 +2971,26 @@ function renderCierre(){
               :(difC>0
                 ?'<div style="text-align:center;font-size:12px;font-weight:700;color:#1E40AF;background:#EFF6FF;border-radius:7px;padding:5px">SOBRÓ: +'+fmt(difC)+'</div>'
                 :'<div style="text-align:center;font-size:12px;font-weight:700;color:#991B1B;background:#FEE2E2;border-radius:7px;padding:5px">FALTA: '+fmt(Math.abs(difC))+'</div>'))+
+            // Conteo físico de caja
+            (c.conteoFisico!=null?
+              (function(){
+                const dif=c.diferenciaCaja||0;
+                const bg=dif===0?'#E1F5EE':dif>0?'#FFF8E1':'#FFF1F0';
+                const col=dif===0?'#085041':dif>0?'#92400E':'#991B1B';
+                const lbl=dif===0?'💵 Caja cuadra':dif>0?'💵 Caja sobra: +'+fmt(dif):'💵 Falta en caja: '+fmt(Math.abs(dif));
+                return'<div style="margin-top:6px;background:'+bg+';border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700;color:'+col+'">'+lbl+'</div>';
+              })()
+            :'')+
+            // Verificación datafono
+            (c.datFono!=null?
+              (function(){
+                const dif=c.diferenciaTarjeta||0;
+                const bg=dif===0?'#DBEAFE':dif>0?'#FFF8E1':'#FFF1F0';
+                const col=dif===0?'#1E40AF':dif>0?'#92400E':'#991B1B';
+                const lbl=dif===0?'💳 Datafono cuadra':dif>0?'💳 Datafono tiene más: +'+fmt(dif):'💳 Falta en datafono: '+fmt(Math.abs(dif));
+                return'<div style="margin-top:4px;background:'+bg+';border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700;color:'+col+'">'+lbl+'</div>';
+              })()
+            :'')+
           '</div>';
         }).join('');
       }else{
@@ -2980,33 +3037,58 @@ function hacerCierre(){
   const gastoCaja=gastos.filter(function(g){return g.tipo==='caja';}).reduce(function(a,g){return a+g.monto;},0);
   const efNeto=ef-gastoCaja;
   const efEnCaja=cajainicial+efNeto;
-  _showConteoCajaModal(turnoNum,esFinDia,efEnCaja,ef,gastoCaja);
+  _showConteoCajaModal(turnoNum,esFinDia,efEnCaja,ef,gastoCaja,tc);
 }
 
-function _showConteoCajaModal(turnoNum,esFinDia,efEnCaja,efVentas,gastoCaja){
+function _showConteoCajaModal(turnoNum,esFinDia,efEnCaja,efVentas,gastoCaja,tc){
+  tc=tc||0;
   const old=document.getElementById('conteoCajaModal');if(old)old.remove();
   const div=document.createElement('div');
   div.id='conteoCajaModal';
-  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px';
-  div.innerHTML=
-    '<div style="background:#fff;border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.35)">'+
-      '<div style="font-size:18px;font-weight:800;color:#111;margin-bottom:4px">💵 Conteo de caja — Turno '+turnoNum+'</div>'+
-      '<div style="font-size:13px;color:#666;margin-bottom:20px">'+(esFinDia?'Cierre final del día':'Cierre de turno')+'</div>'+
-      '<div style="background:#f5f5f0;border-radius:10px;padding:14px;margin-bottom:16px;font-size:14px">'+
-        '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#555">Caja inicial:</span><span style="font-weight:600">'+fmt(cajainicial||0)+'</span></div>'+
-        '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#555">Ventas en efectivo:</span><span style="font-weight:600">'+fmt(efVentas)+'</span></div>'+
-        (gastoCaja?'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#555">Gastos de caja:</span><span style="font-weight:600;color:#E24B4A">- '+fmt(gastoCaja)+'</span></div>':'')+
-        '<hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">'+
-        '<div style="display:flex;justify-content:space-between"><span style="color:#085041;font-weight:700">Sistema espera en caja:</span><span style="font-weight:800;color:#085041;font-size:16px">'+fmt(efEnCaja)+'</span></div>'+
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  // Sección de datafono (solo si hubo ventas en tarjeta)
+  const secDatafono=tc>0?
+    '<div style="margin-bottom:16px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+        '<div style="width:28px;height:28px;border-radius:50%;background:#1E40AF;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">2</div>'+
+        '<label style="font-size:13px;font-weight:700;color:#333">Verificación datafono (tarjeta)</label>'+
       '</div>'+
-      '<label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px">¿Cuánto hay físicamente en caja ahora?</label>'+
-      '<input type="number" id="conteoFisicoInput" min="0" inputmode="decimal" placeholder="Ej: '+Math.round(efEnCaja/1000)*1000+'"'+
-        ' style="width:100%;border:2px solid #1D9E75;border-radius:10px;padding:14px;font-size:22px;text-align:center;font-weight:700;color:#085041;outline:none;box-sizing:border-box;margin-bottom:12px"'+
-        ' oninput="_actualizarDiferencia('+efEnCaja+')">'+
-      '<div id="conteoResultado" style="border-radius:10px;padding:12px;text-align:center;font-size:15px;font-weight:700;margin-bottom:18px;display:none"></div>'+
-      '<div style="display:flex;gap:10px">'+
+      '<div style="background:#EFF6FF;border-radius:10px;padding:12px;margin-bottom:8px;font-size:13px">'+
+        '<div style="display:flex;justify-content:space-between"><span style="color:#555">Sistema registró en tarjeta:</span><span style="font-weight:700;color:#1E40AF">'+fmt(tc)+'</span></div>'+
+      '</div>'+
+      '<input type="number" id="datFonoInput" min="0" inputmode="decimal" placeholder="Total tarjeta en el datafono"'+
+        ' style="width:100%;border:2px solid #1E40AF;border-radius:10px;padding:12px;font-size:20px;text-align:center;font-weight:700;color:#1E40AF;outline:none;box-sizing:border-box;margin-bottom:8px"'+
+        ' oninput="_actualizarDifDatafono('+tc+')">'+
+      '<div id="conteoDatafonoResultado" style="border-radius:10px;padding:10px;text-align:center;font-size:14px;font-weight:700;margin-bottom:4px;display:none"></div>'+
+    '</div>'
+  :'';
+  div.innerHTML=
+    '<div style="background:#fff;border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.35);margin:auto">'+
+      '<div style="font-size:18px;font-weight:800;color:#111;margin-bottom:4px">Verificación de cierre — Turno '+turnoNum+'</div>'+
+      '<div style="font-size:13px;color:#666;margin-bottom:18px">'+(esFinDia?'Cierre final del día':'Cierre de turno')+'</div>'+
+      // ── SECCIÓN 1: EFECTIVO ──
+      '<div style="margin-bottom:16px">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+          '<div style="width:28px;height:28px;border-radius:50%;background:#1D9E75;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">1</div>'+
+          '<label style="font-size:13px;font-weight:700;color:#333">Conteo físico de caja (efectivo)</label>'+
+        '</div>'+
+        '<div style="background:#f5f5f0;border-radius:10px;padding:12px;margin-bottom:8px;font-size:13px">'+
+          '<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:#555">Caja inicial:</span><span style="font-weight:600">'+fmt(cajainicial||0)+'</span></div>'+
+          '<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:#555">Ventas en efectivo:</span><span style="font-weight:600">'+fmt(efVentas)+'</span></div>'+
+          (gastoCaja?'<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:#555">Gastos de caja:</span><span style="font-weight:600;color:#E24B4A">- '+fmt(gastoCaja)+'</span></div>':'')+
+          '<hr style="border:none;border-top:1px dashed #ccc;margin:6px 0">'+
+          '<div style="display:flex;justify-content:space-between"><span style="color:#085041;font-weight:700">Sistema espera en caja:</span><span style="font-weight:800;color:#085041">'+fmt(efEnCaja)+'</span></div>'+
+        '</div>'+
+        '<input type="number" id="conteoFisicoInput" min="0" inputmode="decimal" placeholder="¿Cuánto hay físicamente en caja?"'+
+          ' style="width:100%;border:2px solid #1D9E75;border-radius:10px;padding:12px;font-size:20px;text-align:center;font-weight:700;color:#085041;outline:none;box-sizing:border-box;margin-bottom:8px"'+
+          ' oninput="_actualizarDiferencia('+efEnCaja+')">'+
+        '<div id="conteoResultado" style="border-radius:10px;padding:10px;text-align:center;font-size:14px;font-weight:700;margin-bottom:4px;display:none"></div>'+
+      '</div>'+
+      // ── SECCIÓN 2: DATAFONO (solo si hubo tarjeta) ──
+      secDatafono+
+      '<div style="display:flex;gap:10px;margin-top:8px">'+
         '<button onclick="document.getElementById(\'conteoCajaModal\').remove()" style="flex:1;padding:12px;border-radius:8px;border:1px solid #ddd;background:#f5f5f0;font-size:14px;cursor:pointer">✕ Cancelar</button>'+
-        '<button onclick="_confirmarCierreConConteo('+turnoNum+','+esFinDia+','+efEnCaja+')" style="flex:2;padding:12px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar cierre</button>'+
+        '<button onclick="_confirmarCierreConConteo('+turnoNum+','+esFinDia+','+efEnCaja+','+tc+')" style="flex:2;padding:12px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar cierre</button>'+
       '</div>'+
     '</div>';
   document.body.appendChild(div);
@@ -3025,14 +3107,31 @@ function _actualizarDiferencia(efEnCaja){
   else if(dif>0){res.style.background='#FFF8E1';res.style.color='#92400E';res.innerHTML='SOBRA: +'+fmt(dif);}
   else{res.style.background='#FFF1F0';res.style.color='#991B1B';res.innerHTML='FALTA: '+fmt(Math.abs(dif));}
 }
+function _actualizarDifDatafono(tc){
+  const inp=document.getElementById('datFonoInput');
+  const res=document.getElementById('conteoDatafonoResultado');
+  if(!inp||!res)return;
+  const val=parseFloat(inp.value);
+  if(isNaN(val)||inp.value===''){res.style.display='none';return;}
+  const dif=Math.round(val)-Math.round(tc);
+  res.style.display='block';
+  if(dif===0){res.style.background='#DBEAFE';res.style.color='#1E40AF';res.innerHTML='✓ CUADRA CON EL SISTEMA';}
+  else if(dif>0){res.style.background='#FFF8E1';res.style.color='#92400E';res.innerHTML='DATAFONO TIENE MÁS: +'+fmt(dif);}
+  else{res.style.background='#FFF1F0';res.style.color='#991B1B';res.innerHTML='FALTA EN DATAFONO: '+fmt(Math.abs(dif));}
+}
 
-function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja){
+function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja,tcSistema){
+  tcSistema=tcSistema||0;
   const inp=document.getElementById('conteoFisicoInput');
   const conteoFisico=inp?Math.round(parseFloat(inp.value)||0):null;
   if(conteoFisico===null||inp.value===''){
     toast('Ingresá el monto físico en caja');if(inp)inp.focus();return;
   }
   const diferenciaCaja=conteoFisico-Math.round(efEnCaja);
+  // Datafono (opcional si no hubo tarjeta)
+  const inpDf=document.getElementById('datFonoInput');
+  const datFono=(inpDf&&inpDf.value!=='')?Math.round(parseFloat(inpDf.value)||0):null;
+  const diferenciaTarjeta=datFono!=null?datFono-Math.round(tcSistema):null;
   const old=document.getElementById('conteoCajaModal');if(old)old.remove();
   _cierreEnProceso=true;setTimeout(function(){_cierreEnProceso=false;},3000);
   const hoy=localISO();
@@ -3054,6 +3153,7 @@ function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja){
     gastoCaja,gastoFuerte,gastoSinpe,gastoTransf,
     efNeto,efEnCaja,cajainicial,utilidad,
     conteoFisico,diferenciaCaja,
+    datFono,diferenciaTarjeta,
     ventasList:[...ventas],gastosList:[...gastos],
     billetesCaja:{...cajaBilletes}
   };
@@ -3083,6 +3183,10 @@ function _showResultadoCierreModal(c,turnoNum,esFinDia){
   const difColor=dif===0?'#085041':dif>0?'#92400E':'#991B1B';
   const difBg=dif===0?'#E1F5EE':dif>0?'#FFF8E1':'#FFF1F0';
   const difLabel=dif===0?'✓ CUADRA EXACTO':dif>0?'SOBRA: +'+fmt(dif):'FALTA: '+fmt(Math.abs(dif));
+  const difTc=c.diferenciaTarjeta;
+  const difTcColor=difTc===0?'#1E40AF':difTc>0?'#92400E':'#991B1B';
+  const difTcBg=difTc===0?'#DBEAFE':difTc>0?'#FFF8E1':'#FFF1F0';
+  const difTcLabel=difTc===0?'✓ CUADRA CON EL SISTEMA':difTc>0?'DATAFONO TIENE MÁS: +'+fmt(difTc):'FALTA EN DATAFONO: '+fmt(Math.abs(difTc));
   const nextLabel=esFinDia?'🌙 Finalizar día':'▶ Iniciar Turno 2';
   const nextAction=esFinDia
     ?'document.getElementById(\'resultadoCierreModal\').remove();toast(\'✅ Día finalizado. ¡Hasta mañana! 🌙\');setTimeout(doLogout,1200)'
@@ -3103,13 +3207,60 @@ function _showResultadoCierreModal(c,turnoNum,esFinDia){
         '<div style="font-size:30px;font-weight:800;color:#085041;margin-bottom:4px">'+fmt(c.efEnCaja||0)+'</div>'+
         '<div style="font-size:12px;color:#5a8a6a">Caja inicial '+fmt(c.cajainicial||0)+(c.efNeto?' + efectivo neto '+fmt(c.efNeto):'')+'</div>'+
       '</div>'+
-      // Resultado del conteo físico
+      // Resultado conteo físico (efectivo)
       (c.conteoFisico!=null?
-        '<div style="background:'+difBg+';border-radius:10px;padding:14px;margin-bottom:14px">'+
+        '<div style="background:'+difBg+';border-radius:10px;padding:12px;margin-bottom:8px">'+
+          '<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:.4px;margin-bottom:6px">💵 EFECTIVO EN CAJA</div>'+
           '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:#555">Conteo físico:</span><span style="font-weight:700">'+fmt(c.conteoFisico)+'</span></div>'+
-          '<div style="font-size:15px;font-weight:800;text-align:center;margin-top:8px;color:'+difColor+'">'+difLabel+'</div>'+
+          '<div style="font-size:14px;font-weight:800;text-align:center;margin-top:6px;color:'+difColor+'">'+difLabel+'</div>'+
         '</div>'
       :'')+
+      // Resultado verificación datafono (tarjeta)
+      (c.datFono!=null?
+        '<div style="background:'+difTcBg+';border-radius:10px;padding:12px;margin-bottom:8px">'+
+          '<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:.4px;margin-bottom:6px">💳 TARJETA — DATAFONO</div>'+
+          '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span style="color:#555">Sistema registró:</span><span style="font-weight:700">'+fmt(c.tc||0)+'</span></div>'+
+          '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:#555">Datafono reporta:</span><span style="font-weight:700">'+fmt(c.datFono)+'</span></div>'+
+          '<div style="font-size:14px;font-weight:800;text-align:center;margin-top:6px;color:'+difTcColor+'">'+difTcLabel+'</div>'+
+        '</div>'
+      :'')+
+      // Resumen total de diferencias (impacto neto en utilidad)
+      (function(){
+        if(c.conteoFisico==null)return'';
+        const dC=c.diferenciaCaja||0;
+        const dT=(c.datFono!=null)?(c.diferenciaTarjeta||0):null;
+        const total=dC+(dT!=null?dT:0);
+        const hasBoth=dT!=null;
+        // Solo mostrar si hay alguna diferencia real
+        if(!hasBoth&&dC===0)return'';
+        const bg=total===0?'#E1F5EE':total>0?'#FFF8E1':'#FFF1F0';
+        const col=total===0?'#085041':total>0?'#92400E':'#991B1B';
+        let totalLabel,nota='';
+        if(total===0){totalLabel='✓ Utilidad cuadra en total';}
+        else if(total>0){totalLabel='Sobra en utilidad: +'+fmt(total);}
+        else{totalLabel='Falta en utilidad: '+fmt(Math.abs(total));}
+        // Nota si las diferencias se compensan parcialmente entre sí
+        if(hasBoth&&dC!==0&&dT!==0&&Math.sign(dC)!==Math.sign(dT)){
+          nota='<div style="font-size:11px;color:#666;text-align:center;margin-top:4px">'+
+            (total===0
+              ?'Las diferencias se compensan — posible venta registrada en método incorrecto'
+              :'Las diferencias se compensan parcialmente entre sí')+
+          '</div>';
+        }
+        return'<div style="background:'+bg+';border:2px solid '+col+';border-radius:10px;padding:14px;margin-bottom:14px">'+
+          '<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:.4px;margin-bottom:8px">IMPACTO NETO EN UTILIDAD</div>'+
+          (hasBoth?
+            '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px"><span style="color:#555">Diferencia efectivo:</span><span style="font-weight:700;color:'+(dC===0?'#085041':dC>0?'#92400E':'#991B1B')+'">'+
+              (dC===0?'—':dC>0?'+'+fmt(dC):fmt(dC))+
+            '</span></div>'+
+            '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:#555">Diferencia tarjeta:</span><span style="font-weight:700;color:'+(dT===0?'#1E40AF':dT>0?'#92400E':'#991B1B')+'">'+
+              (dT===0?'—':dT>0?'+'+fmt(dT):fmt(dT))+
+            '</span></div>'
+          :'')+
+          '<div style="font-size:16px;font-weight:800;text-align:center;color:'+col+'">'+totalLabel+'</div>'+
+          nota+
+        '</div>';
+      })()+
       '<button onclick="printCierreReport(cierres['+cIdx+'])" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ccc;background:#f5f5f0;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">🖨 Imprimir cierre Turno '+turnoNum+'</button>'+
       '<button onclick="'+nextAction+'" style="width:100%;padding:14px;border-radius:10px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">'+nextLabel+'</button>'+
     '</div>';
@@ -3250,8 +3401,9 @@ function guardarCajaInicial(afterCierre){
   saveLS();
   document.getElementById("cajaInicialModal").remove();
   if(afterCierre){
+    // NO cerrar sesión — seguir trabajando en el nuevo periodo
     toast("&#128176; Caja inicial: "+fmt(cajainicial)+" — Nuevo periodo iniciado");
-    setTimeout(function(){doLogout();},1200);
+    goScreen('salon');
   } else {
     toast("&#128176; Caja inicial confirmada: "+fmt(cajainicial));
     renderCierre();
@@ -3894,9 +4046,22 @@ function _enviarPedidoNtfy(mesaNombre,ord){
     toast('📡 Sin internet — el pedido se guardó y se enviará cuando regrese la conexión');
   });
 }
-// Cuando regresa el internet, reenviar cola automáticamente
+// Cuando se pierde el internet: pausar SSE/polling sin afectar nada del POS
+window.addEventListener('offline',function(){
+  _detenerPollTablet(); // cierra SSE y polling para no generar errores en consola
+  toast('📡 Sin internet — el sistema sigue funcionando con normalidad');
+});
+// Cuando regresa el internet: reanudar sync y reenviar cola pendiente
 window.addEventListener('online',function(){
-  if(!_tabletSendQueue.length)return;
+  // Reiniciar sync tablet si aplica
+  if(!TABLET_MODE&&(ticketConfig.tabletTopic||'').trim()){
+    setTimeout(_iniciarPollTablet,1000); // pequeño delay para que la red estabilice
+  }
+  // Reenviar pedidos en cola
+  if(!_tabletSendQueue.length){
+    toast('✅ Internet restaurado');
+    return;
+  }
   toast('📡 Internet restaurado — reenviando '+_tabletSendQueue.length+' pedido(s) pendiente(s)...');
   const cola=[..._tabletSendQueue];
   _tabletSendQueue=[];
