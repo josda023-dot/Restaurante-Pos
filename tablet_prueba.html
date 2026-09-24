@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Soda El Tucan — POS</title>
+<title>PRUEBA — Soda El Tucan</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
 body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
@@ -329,7 +329,6 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
         <div style="min-width:110px"><label>Precio</label><input class="fi" id="maPr" type="number" inputmode="decimal"></div>
         <div style="min-width:130px"><label>Categoria</label><select class="fi" id="maCat"></select></div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;justify-content:flex-end">
-          <label style="font-size:12px;color:#555;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="maPx"> Preguntar adicionales</label>
           <label style="font-size:12px;color:#555;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="maCb"> Incluye bebida</label>
           <label style="font-size:12px;color:#555;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="maBi"> Bebida incluible (natural/café)</label>
         </div>
@@ -432,6 +431,9 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
 </div>
 
 <script>
+/* COPIA DE PRUEBA: datos separados del sistema real (claves PRUEBA_) */
+const _lsP={getItem:function(k){return localStorage.getItem('PRUEBA_'+k);},setItem:function(k,v){localStorage.setItem('PRUEBA_'+k,v);},removeItem:function(k){localStorage.removeItem('PRUEBA_'+k);}};
+(function(){var b=document.createElement('div');b.textContent='MODO PRUEBA';b.style.cssText='position:fixed;bottom:6px;left:6px;z-index:9999;background:#E24B4A;color:#fff;font:700 11px sans-serif;padding:3px 9px;border-radius:10px;pointer-events:none;opacity:.85';document.body.appendChild(b);})();
 const ALL_SCREENS=["salon","ventas","gastos","cierre","menu-admin","usuarios"];
 
 /* ── TABLET MODE ── */
@@ -676,10 +678,10 @@ let _salonEditMode=false;
 let _mesaDragState=null,_mesaResizeState=null;
 let descuento={tipo:'pct',valor:0};
 let cobraItbis=true,cobraServicio=false;
-let tipoCambio=parseInt(localStorage.getItem('rpos_tipoCambio'))||530; // colones por dólar
+let tipoCambio=parseInt(_lsP.getItem('rpos_tipoCambio'))||530; // colones por dólar
 let efModoUSD=false; // efectivo modal en modo dólares
 let efDolaresAmt=''; // monto ingresado en dólares
-let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false,tabletTopic:''};
+let ticketConfig={nombre:'Soda El Tucan',slogan:'Parrita, Costa Rica',direccion:'',telefono:'',pieMsg:'¡Gracias por su visita!',mostrarEmpleado:true,defaultItbis:true,defaultServicio:false,tabletTopic:'soda-tucan-prueba'};
 let _tabletSSE=null;            // EventSource SSE para pedidos tablet en tiempo real
 let _tabletPollInterval=null;   // setInterval fallback si SSE falla
 let _tabletPedidosVistos=new Set(); // dedup de pedidos ya procesados (ts|mesa)
@@ -831,7 +833,7 @@ function verifyLogin(){
     if(u.role==="admin")setTimeout(checkAutoRespaldo,1500);
     // Preguntar caja inicial al arrancar el sistema (solo la primera vez del día)
     const _hoy=localISO();
-    if(localStorage.getItem('rpos_cajaPedida')!==_hoy){
+    if(_lsP.getItem('rpos_cajaPedida')!==_hoy){
       // NO marcar cajaPedida aquí — se marca solo cuando el usuario confirma
       setTimeout(showCajaInicialModal,500);
     }
@@ -1140,18 +1142,22 @@ function renderMesaModal(){
         const pr=o.price===0?'<span style="color:#059669;font-weight:700">₡0 ✓</span>':'<span>'+fmt(o.price*o.qty)+'</span>';
         return'<div style="display:flex;align-items:center;gap:6px;padding:2px 0 2px 24px;font-size:11px;color:#555">'
           +'<span style="flex:1">'+(o.qty>1?o.qty+'× ':'')+o.name+'</span>'+pr
-          +'<button onclick="adjQty('+mq+','+o.id+',-1)" title="Quitar" style="border:none;background:none;color:#c0392b;cursor:pointer;font-size:15px;padding:0 4px">&times;</button>'
           +'</div>';
       }
       const esLineaWizard=o.mid&&o.id!==o.mid;
       const masAccion=esLineaWizard?'addToOrder('+o.mid+')':'adjQty('+mq+','+o.id+',1)';
+      const enviados=o.sentQty||0;
+      const todoEnviado=enviados>=o.qty;
+      const notaHTML=enviados>0
+        ?(o.nota?'<div style="width:100%;font-size:11px;color:#085041;background:#f0faf6;border-radius:6px;padding:4px 8px;margin-top:3px">📝 '+o.nota+'</div>':'')
+        :'<input type="text" inputmode="text" placeholder="✏️ Instrucción especial..." value="'+(o.nota||'').replace(/"/g,'&quot;')+'" oninput="setItemNota('+mq+','+o.id+',this.value)" style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid '+(o.nota?'#1D9E75':'#ddd')+';border-radius:8px;color:'+(o.nota?'#085041':'#888')+';background:'+(o.nota?'#f0faf6':'#fff')+';margin-top:3px;outline:none;box-sizing:border-box">';
       return'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 0 3px;border-top:1px solid #eee">'
-        +'<button class="qb" onclick="adjQty('+mq+','+o.id+',-1)">&minus;</button>'
+        +(o.qty>enviados?'<button class="qb" onclick="adjQty('+mq+','+o.id+',-1)">&minus;</button>':'<span title="Ya enviado a cocina" style="width:26px;text-align:center;font-size:13px;flex-shrink:0">🔒</span>')
         +'<span style="font-size:13px;font-weight:700;min-width:20px;text-align:center">'+o.qty+'</span>'
         +'<button class="qb" onclick="'+masAccion+'">+</button>'
-        +'<span style="flex:1;font-size:12px;color:#111;font-weight:600;line-height:1.3">'+o.name+'</span>'
+        +'<span style="flex:1;font-size:12px;color:#111;font-weight:600;line-height:1.3">'+o.name+(todoEnviado?' <span style="font-size:9px;font-weight:600;color:#1E40AF;background:#E6F1FB;border-radius:4px;padding:1px 5px;white-space:nowrap">✓ enviado</span>':'')+'</span>'
         +'<span style="font-size:12px;color:#666">'+fmt(o.price*o.qty)+'</span>'
-        +'<input type="text" inputmode="text" placeholder="✏️ Instrucción especial..." value="'+(o.nota||'').replace(/"/g,'&quot;')+'" oninput="setItemNota('+mq+','+o.id+',this.value)" style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid '+(o.nota?'#1D9E75':'#ddd')+';border-radius:8px;color:'+(o.nota?'#085041':'#888')+';background:'+(o.nota?'#f0faf6':'#fff')+';margin-top:3px;outline:none;box-sizing:border-box">'
+        +notaHTML
         +'</div>';
     }).join('');
     const totalOrden=ord.items.reduce(function(a,i){return a+i.price*i.qty;},0);
@@ -1275,7 +1281,7 @@ function setMenuBusqueda(val){
 }
 /* ── TARJETA DE PLATILLO (TABLET) ── */
 function _tabletCardHTML(i){
-  const tags=((i.opciones&&i.opciones.length)?'⚙':'')+(i.pedirExtras?'➕':'')+(i.conBebida?'🥤':'');
+  const tags=((i.opciones&&i.opciones.length)?'⚙':'')+((i.extras&&i.extras.length)?'➕':'')+(i.conBebida?'🥤':'');
   return'<div onclick="addToOrder('+i.id+')" style="position:relative;background:#f8f8f6;border-radius:9px;padding:8px 6px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;user-select:none">'
     +(tags?'<div style="position:absolute;top:3px;right:5px;font-size:9px;opacity:.75">'+tags+'</div>':'')
     +'<div style="font-size:20px;margin-bottom:3px">'+i.emoji+'</div>'
@@ -1286,7 +1292,8 @@ function _tabletCardHTML(i){
 /* ── ASISTENTE DE OPCIONES → ADICIONALES → BEBIDA (TABLET) ── */
 let _wz=null,_lidC=0;
 function _lineId(){_lidC=(_lidC+1)%1000;return Date.now()*1000+_lidC;}
-function _itemNecesitaWizard(mi){return!!(mi&&((mi.opciones&&mi.opciones.length)||mi.pedirExtras||mi.conBebida));}
+function _itemNecesitaWizard(mi){return!!(mi&&((mi.opciones&&mi.opciones.length)||(mi.extras&&mi.extras.length)||mi.conBebida));}
+function _extrasDeItem(mi){return(mi&&mi.extras||[]).map(function(id){return menu.find(function(m){return m.id===id;});}).filter(Boolean);}
 function _extrasDisponibles(){return menu.filter(function(m){return m.cat&&m.cat.startsWith('+');});}
 function _bebidasIncluibles(){return menu.filter(function(m){return m.esBebidaIncluible;});}
 function _wzItem(){return _wz?menu.find(function(m){return m.id===_wz.mid;}):null;}
@@ -1307,7 +1314,7 @@ function _wzAvanzar(){
   const orden=['opc','extras','bebida'];
   const desde=Math.max(orden.indexOf(_wz.fase)+1,1);
   for(let k=desde;k<orden.length;k++){
-    if(orden[k]==='extras'&&mi.pedirExtras&&_extrasDisponibles().length){_wz.fase='extras';_wzRender();return;}
+    if(orden[k]==='extras'&&_extrasDeItem(mi).length){_wz.fase='extras';_wzRender();return;}
     if(orden[k]==='bebida'&&mi.conBebida&&_bebidasIncluibles().length){_wz.fase='bebida';_wzRender();return;}
   }
   _wzFinalizar(0);
@@ -1362,7 +1369,7 @@ function _wzRender(){
       +'</div>';
   }else if(_wz.fase==='extras'){
     titulo='¿Algún adicional?';
-    const ex=_extrasDisponibles();
+    const ex=_extrasDeItem(mi);
     const grupos=[...new Set(ex.map(function(e){return e.cat;}))];
     cuerpo=grupos.map(function(g){
       return'<div style="font-size:12px;font-weight:700;color:#633806;margin:10px 0 6px">'+g.replace(/^\+/,'')+'</div>'
@@ -1403,13 +1410,13 @@ function _wzRender(){
 }
 
 /* ── EDITOR DE OPCIONES (ADMIN) ── */
-let _opcDraft=null,_opcItemId=null,_opcReg=[];
+let _opcDraft=null,_opcItemId=null,_opcReg=[],_opcExtras=[],_opcExtrasCat=null;
 function _escA(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function _opcNuevaPregunta(){return{pregunta:'',choices:[{texto:''},{texto:''}]};}
 function abrirEditorOpciones(id){
   if(!activeUser||activeUser.role!=='admin'){toast('Solo administradores pueden editar opciones');return;}
   const it=menu.find(function(m){return m.id===id;});if(!it)return;
-  _opcItemId=id;_opcDraft=JSON.parse(JSON.stringify(it.opciones||[]));
+  _opcItemId=id;_opcDraft=JSON.parse(JSON.stringify(it.opciones||[]));_opcExtras=(it.extras||[]).slice();_opcExtrasCat=null;
   _renderEditorOpciones();
 }
 function _renderEditorOpciones(){
@@ -1442,13 +1449,32 @@ function _renderEditorOpciones(){
   const d=document.createElement('div');d.id='opcEditorModal';d.className='overlay-bg';
   d.innerHTML='<div style="background:#fff;border-radius:12px;width:100%;max-width:760px;padding:18px;margin:auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:16px;font-weight:700">⚙ Opciones — '+_escA(it.name)+'</div><button onclick="_cerrarEditorOpciones()" style="'+sbtn+'">&times; Cerrar</button></div>'
-    +'<div style="font-size:12px;color:#777;margin-bottom:10px;line-height:1.5">En la tablet, al tocar este platillo se hacen las preguntas en orden. Cada opción puede tener su propia sub-pregunta (ej: Frito → ¿Tierno o bien cocido?). El precio extra es opcional y se suma al platillo.</div>'
+    +'<div style="font-size:14px;font-weight:700;color:#333;margin:4px 0">❓ Preguntas</div><div style="font-size:12px;color:#777;margin-bottom:10px;line-height:1.5">En la tablet, al tocar este platillo se hacen las preguntas en orden. Cada opción puede tener su propia sub-pregunta (ej: Frito → ¿Tierno o bien cocido?). El precio extra es opcional y se suma al platillo.</div>'
     +cuerpo
     +'<button onclick="_opcAddPregunta()" style="'+sbtn+';padding:9px 14px;margin-top:6px;color:#085041;border-color:#5DCAA5;font-weight:600">+ Agregar pregunta</button>'
+    +_htmlExtrasEditor()
     +'<div style="display:flex;gap:8px;margin-top:16px"><button class="btn-green" style="flex:1;padding:11px" onclick="_guardarEditorOpciones()">✓ Guardar opciones</button><button class="btn-sec" style="flex:1" onclick="_cerrarEditorOpciones()">Cancelar</button></div>'
   +'</div>';
   document.body.appendChild(d);
 }
+function _htmlExtrasEditor(){
+  const todos=_extrasDisponibles();
+  const grupos=[...new Set(todos.map(function(e){return e.cat;}))];
+  if(!_opcExtrasCat||grupos.indexOf(_opcExtrasCat)<0)_opcExtrasCat=grupos[0]||null;
+  const sel=_opcExtras.map(function(id){return menu.find(function(m){return m.id===id;});}).filter(Boolean);
+  const chipSel=sel.map(function(e){return'<span style="display:inline-flex;align-items:center;gap:4px;background:#E1F5EE;color:#085041;border:1px solid #5DCAA5;border-radius:14px;padding:4px 6px 4px 10px;font-size:12px;font-weight:600">'+_escA(e.name)+'<button onclick="_opcToggleExtra('+e.id+')" style="border:none;background:none;color:#c0392b;cursor:pointer;font-size:14px;line-height:1;padding:0 2px">&times;</button></span>';}).join('');
+  const tabs=grupos.map(function(g){const act=g===_opcExtrasCat;return'<button onclick="_opcSetExtrasCat(\''+g.replace(/'/g,"\\'")+'\')" style="padding:5px 12px;border-radius:14px;border:1px solid '+(act?'#633806':'#e8d8c0')+';background:'+(act?'#FAEEDA':'#fff')+';color:#633806;font-size:12px;cursor:pointer;font-weight:'+(act?700:500)+'">'+_escA(g.replace(/^\+/,''))+'</button>';}).join('');
+  const lista=todos.filter(function(e){return e.cat===_opcExtrasCat;}).map(function(e){const on=_opcExtras.indexOf(e.id)>=0;return'<button onclick="_opcToggleExtra('+e.id+')" style="padding:6px 10px;border-radius:8px;border:1.5px solid '+(on?'#1D9E75':'#ddd')+';background:'+(on?'#E1F5EE':'#fff')+';color:#111;font-size:12px;cursor:pointer">'+(on?'✓ ':'')+_escA(e.name)+' <span style="color:#1D9E75">'+fmt(e.price)+'</span></button>';}).join('');
+  return'<div style="border-top:2px dashed #e8d8c0;margin-top:16px;padding-top:12px">'
+    +'<div style="font-size:14px;font-weight:700;color:#633806;margin-bottom:4px">➕ Adicionales que se preguntan</div>'
+    +'<div style="font-size:12px;color:#777;margin-bottom:8px">Solo estos aparecen en la tablet al pedir este platillo. Los demás se piden aparte desde la categoría Adicionales.</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;min-height:28px">'+(chipSel||'<span style="font-size:12px;color:#aaa">Ninguno — no se preguntan adicionales</span>')+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+tabs+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+lista+'</div>'
+  +'</div>';
+}
+function _opcToggleExtra(id){const i=_opcExtras.indexOf(id);if(i>=0)_opcExtras.splice(i,1);else _opcExtras.push(id);_renderEditorOpciones();}
+function _opcSetExtrasCat(g){_opcExtrasCat=g;_renderEditorOpciones();}
 function _opcBorrar(ri){const r=_opcReg[ri];if(!r)return;if(r.owner){delete r.owner.sub;}else if(r.arr){r.arr.splice(r.idx,1);}_renderEditorOpciones();}
 function _opcAddChoice(qi){const r=_opcReg[qi];if(!r)return;r.obj.choices.push({texto:''});_renderEditorOpciones();}
 function _opcAddSub(ri){const r=_opcReg[ri];if(!r)return;r.obj.sub=_opcNuevaPregunta();_renderEditorOpciones();}
@@ -1469,10 +1495,13 @@ function _guardarEditorOpciones(){
   const it=menu.find(function(m){return m.id===_opcItemId;});if(!it)return;
   const limpio=_opcDraft.map(_opcLimpiar).filter(Boolean);
   if(limpio.length)it.opciones=limpio;else delete it.opciones;
+  const exOk=_opcExtras.filter(function(id){return menu.some(function(m){return m.id===id;});});
+  if(exOk.length)it.extras=exOk;else delete it.extras;
+  delete it.pedirExtras;
   saveLS();_cerrarEditorOpciones();renderMenuAdmin();_programarEnvioMenu();
-  toast(limpio.length?'✓ Opciones guardadas ('+limpio.length+' pregunta'+(limpio.length>1?'s':'')+')':'Opciones eliminadas');
+  toast('✓ Guardado — '+limpio.length+' pregunta(s), '+exOk.length+' adicional(es)');
 }
-function _cerrarEditorOpciones(){const m=document.getElementById('opcEditorModal');if(m)m.remove();_opcDraft=null;_opcReg=[];}
+function _cerrarEditorOpciones(){const m=document.getElementById('opcEditorModal');if(m)m.remove();_opcDraft=null;_opcReg=[];_opcExtras=[];}
 
 /* ── SYNC MENÚ COMPU → TABLET (por ntfy, en partes) ── */
 let _menuEnvioT=null,_menuChunks={},_menuUltimoTs=0,_menuReqResp=0;
@@ -1522,8 +1551,20 @@ function _recibirParteMenu(data){
 
 /* ── MIGRACIÓN: valores iniciales de bebida incluida / adicionales / opciones ── */
 const _OPC_HUEVO=[{pregunta:'¿Cómo quiere el huevo?',choices:[{texto:'Frito',sub:{pregunta:'¿Cómo lo quiere frito?',choices:[{texto:'Tierno'},{texto:'Bien cocido'}]}},{texto:'Revuelto'}]}];
+function _migrarExtrasV2(){
+  if(_lsP.getItem('rpos_mig_extras_v2'))return;
+  const porNombre=function(lista){return lista.map(function(n){const m=menu.find(function(x){return x.name===n&&x.cat&&x.cat.startsWith('+');});return m?m.id:null;}).filter(function(x){return x!==null;});};
+  const exDes=porNombre(['Huevos','Queso','Natilla','Plátano Maduro','Tortilla Mediana']);
+  const exCas=porNombre(['Huevos','Plátano Maduro','Ensalada','Arroz','Frijoles']);
+  menu.forEach(function(m){
+    if(m.pedirExtras&&!m.extras){const l=m.cat==='Desayunos'?exDes:exCas;if(l.length)m.extras=l.slice();}
+    delete m.pedirExtras;
+  });
+  _lsP.setItem('rpos_mig_extras_v2','1');
+  saveLS();
+}
 function _migrarOpcionesV1(){
-  if(localStorage.getItem('rpos_mig_opc_v1'))return;
+  if(_lsP.getItem('rpos_mig_opc_v1'))return;
   menu.forEach(function(m){
     if(m.cat==='Desayunos'||/^Casado/i.test(m.name)){
       if(m.conBebida===undefined)m.conBebida=true;
@@ -1533,12 +1574,12 @@ function _migrarOpcionesV1(){
     if(/^Batido/i.test(m.name))delete m.esBebidaIncluible;
     if(m.name==='Pinto con Huevo'&&!m.opciones)m.opciones=JSON.parse(JSON.stringify(_OPC_HUEVO));
   });
-  localStorage.setItem('rpos_mig_opc_v1','1');
+  _lsP.setItem('rpos_mig_opc_v1','1');
   saveLS();
 }
 function addToOrder(id){const item=menu.find(i=>i.id===id);if(!item)return;if(TABLET_MODE&&_itemNecesitaWizard(item)){_abrirWizard(id);return;}const ord=orders[activeMesa];const ex=ord.items.find(i=>i.id===id&&!i.sub);if(ex)ex.qty++;else ord.items.push({id,mid:id,name:item.name,price:item.price,qty:1,nota:''});saveLS();renderMesaModal();}
 function setItemNota(mesa,id,val){const ord=orders[mesa];if(!ord)return;const it=ord.items.find(i=>i.id===id);if(it){it.nota=val;clearTimeout(setItemNota._t);setItemNota._t=setTimeout(saveLS,800);}}
-function adjQty(mesa,id,d){const ord=orders[mesa];const idx=ord.items.findIndex(i=>i.id===id);if(idx<0)return;ord.items[idx].qty+=d;if(ord.items[idx].qty<=0){const rid=ord.items[idx].id;ord.items.splice(idx,1);ord.items=ord.items.filter(i=>i.parent!==rid);}saveLS();renderMesaModal();}
+function adjQty(mesa,id,d){const ord=orders[mesa];const idx=ord.items.findIndex(i=>i.id===id);if(idx<0)return;if(TABLET_MODE&&d<0&&ord.items[idx].qty+d<(ord.items[idx].sentQty||0)){toast('🔒 Ya fue enviado a cocina — solo se puede quitar desde la compu principal');return;}ord.items[idx].qty+=d;if(ord.items[idx].qty<=0){const rid=ord.items[idx].id;ord.items.splice(idx,1);ord.items=ord.items.filter(i=>i.parent!==rid);}saveLS();renderMesaModal();}
 function editItemPrice(mesa,id){
   if(!activeUser||activeUser.role!=='admin'){toast('Solo administradores pueden cambiar el precio');return;}
   const ord=orders[mesa];const it=ord&&ord.items.find(i=>i.id===id);if(!it)return;
@@ -1630,7 +1671,7 @@ function totalEfRecibido(){return efModoUSD?Math.round((parseFloat(efDolaresAmt)
 function setEfModoUSD(usd,cp){efModoUSD=usd;if(usd){efBilletes={};}else{efDolaresAmt='';}showEfectivoModal(cp);}
 function addDolarBill(v,cp){efDolaresAmt=String(Math.round(((parseFloat(efDolaresAmt)||0)+v)*100)/100);showEfectivoModal(cp);}
 function setDolarAmt(val,cp){efDolaresAmt=val;const d=document.getElementById("efModal");if(!d)return;const{total}=getTotal();const en=Math.round((parseFloat(val)||0)*tipoCambio);const v=en-total;const rv=document.getElementById("ef-rec-val");const vv=document.getElementById("ef-vue-val");const vl=document.getElementById("ef-vue-lbl");const cb=document.getElementById("ef-confirm-btn");if(rv)rv.textContent=en>0?fmt(en):'—';if(vv){if(en>0&&v===0){vv.textContent='Exacto';vv.className='totbox-val verde';}else if(v>0){vv.textContent=fmt(v);vv.className='totbox-val verde';}else if(v<0&&en>0){vv.textContent='Falta '+fmt(Math.abs(v));vv.className='totbox-val rojo';}else{vv.textContent='—';vv.className='totbox-val azul';}}if(vl)vl.textContent=v<0?'Falta':'Vuelto';if(cb){const ok=en>=total&&en>0;cb.disabled=!ok;cb.style.background=ok?'':'#bbb';cb.textContent=ok?'✓ Confirmar cobro':'Monto insuficiente';}}
-function setTipoCambioModal(val,cp){const v=parseInt(val)||530;tipoCambio=v;localStorage.setItem('rpos_tipoCambio',v);showEfectivoModal(cp);}
+function setTipoCambioModal(val,cp){const v=parseInt(val)||530;tipoCambio=v;_lsP.setItem('rpos_tipoCambio',v);showEfectivoModal(cp);}
 function showEfectivoModal(cp){
   const old=document.getElementById("efModal");if(old)old.remove();
   const{total}=getTotal();
@@ -1729,7 +1770,7 @@ function confirmarPago(cobradoPor){
   const ventaGuardada=ventas[ventas.length-1];
   _archivarVenta(ventaGuardada); // guardar en archivo histórico (IndexedDB)
   // Guardar la venta al disco PRIMERO antes de borrar la orden (protección contra corte de luz)
-  try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
+  try{_lsP.setItem('rpos_ventas',JSON.stringify(ventas));_lsP.setItem('rpos_nextVid',nextVid);}catch(e){}
   _enviarCierreMesaNtfy(activeMesa); // notificar tablet que la mesa fue cobrada
   orders[activeMesa]={items:[]};saveLS();closeEfModal();closeMesa();
   showTicket(ventaGuardada);
@@ -1915,7 +1956,7 @@ function sv2Finalizar(cobradoPor){
   sv2ModoUSD=false;sv2DolaresAmt='';
   _archivarVenta(ventas[ventas.length-1]); // guardar en archivo histórico (IndexedDB)
   // Guardar la venta al disco PRIMERO antes de modificar la orden
-  try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
+  try{_lsP.setItem('rpos_ventas',JSON.stringify(ventas));_lsP.setItem('rpos_nextVid',nextVid);}catch(e){}
   // Quitar los ítems pagados de la mesa
   Object.keys(sv2Sel).forEach(function(id){
     const idx=ord.items.findIndex(function(i){return i.id===parseInt(id);});
@@ -2306,7 +2347,7 @@ function finalizarPagoSplit(cobradoPor){
   ventas.push({id:nextVid++,hora:hm,fecha:localISO(now),mesa:activeMesa,items:[...ord.items],metodo:"Dividido",cobradoPor:cobradoPor||"&mdash;",sub,descMonto:0,servMonto,tax,total,recibido:total,vuelto:0,billetesRecibidos:{},vueltoDesg:[],pagos});
   _archivarVenta(ventas[ventas.length-1]); // guardar en archivo histórico (IndexedDB)
   // Guardar venta al disco PRIMERO antes de borrar la orden
-  try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
+  try{_lsP.setItem('rpos_ventas',JSON.stringify(ventas));_lsP.setItem('rpos_nextVid',nextVid);}catch(e){}
   _enviarCierreMesaNtfy(activeMesa); // notificar tablet que la mesa fue cobrada
   orders[activeMesa]={items:[]};
   splitGroups=[];splitAssignment={};splitEfBilletes={};splitEfQueue=[];
@@ -3474,7 +3515,7 @@ function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja,tcSistema){
   const _guardadoOK=saveLS();
   if(_guardadoOK){
     try{
-      const _ck=JSON.parse(localStorage.getItem('rpos_cierres')||'[]');
+      const _ck=JSON.parse(_lsP.getItem('rpos_cierres')||'[]');
       if(_ck.length<cierres.length){
         alert('⚠️ ALERTA: El cierre se guardó en memoria pero NO en disco.\n\nHacé un RESPALDO INMEDIATO desde Menú → Exportar respaldo antes de cerrar el navegador o apagar la computadora.');
       }
@@ -3497,7 +3538,7 @@ function _showResultadoCierreModal(c,turnoNum,esFinDia){
   const difTcBg=difTc===0?'#DBEAFE':difTc>0?'#FFF8E1':'#FFF1F0';
   const difTcLabel=difTc===0?'✓ CUADRA CON EL SISTEMA':difTc>0?'DATAFONO TIENE MÁS: +'+fmt(difTc):'FALTA EN DATAFONO: '+fmt(Math.abs(difTc));
   const siguienteTurno=turnoNum+1;
-  const nextActionTurno='document.getElementById(\'resultadoCierreModal\').remove();localStorage.removeItem(\'rpos_cajaPedida\');showCajaInicialModal(true)';
+  const nextActionTurno='document.getElementById(\'resultadoCierreModal\').remove();_lsP.removeItem(\'rpos_cajaPedida\');showCajaInicialModal(true)';
   const nextActionFin='document.getElementById(\'resultadoCierreModal\').remove();toast(\'✅ Día finalizado. ¡Hasta mañana! 🌙\');setTimeout(doLogout,1200)';
   const div=document.createElement('div');
   div.id='resultadoCierreModal';
@@ -3642,7 +3683,7 @@ function _verificarCierreAutomatico(){
   if(cierresCreados>0){
     cajaBilletes={};
     cajainicial=0;
-    localStorage.removeItem('rpos_cajaPedida'); // pedir caja al iniciar el nuevo día
+    _lsP.removeItem('rpos_cajaPedida'); // pedir caja al iniciar el nuevo día
     saveLS();
     const dias=diasOrdenados.join(', ');
     toast('📅 Se cerraron automáticamente los días anteriores sin cierre ('+dias+'). Datos guardados en el historial.');
@@ -3705,7 +3746,7 @@ function guardarCajaInicial(afterCierre){
   }
   cajainicial=val;
   saveLS();
-  localStorage.setItem('rpos_cajaPedida',localISO()); // marcar aquí, solo cuando se confirmó
+  _lsP.setItem('rpos_cajaPedida',localISO()); // marcar aquí, solo cuando se confirmó
   document.getElementById("cajaInicialModal").remove();
   if(afterCierre){
     // NO cerrar sesión — seguir trabajando en el nuevo periodo
@@ -3764,14 +3805,14 @@ function renderMenuAdmin(){
     const realIdx=menu.indexOf(i);
     const drag=canDrag?` draggable="true" data-dnd-arr="menu" data-dnd-idx="${realIdx}" ondragstart="dndStart(event,'menu',${realIdx})" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,'menu',${realIdx})" ondragend="dndEnd(event)"`:'';
     const handle=canDrag?`<span class="dnd-handle" title="Arrastrar para reordenar" style="touch-action:none;padding:10px 8px;cursor:grab;font-size:16px" ontouchstart="_tDndStart(event,'menu',${realIdx})">⠿</span>`:'';
-    return`<div class="item-edit-row" id="itemrow-${i.id}"${drag}>${handle}<span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}${i.pedirExtras?' <span title="Pregunta adicionales" style="font-size:11px">➕</span>':''}${i.conBebida?' <span title="Incluye bebida" style="font-size:11px">🥤</span>':''}${i.esBebidaIncluible?' <span title="Bebida incluible" style="font-size:10px;background:#DCFCE7;color:#166534;border-radius:4px;padding:1px 5px">incluible</span>':''}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-sec" style="width:auto;padding:6px 10px;font-size:12px;${i.opciones&&i.opciones.length?'border-color:#8B5CF6;color:#5B21B6;background:#F3E8FF':''}" onclick="abrirEditorOpciones(${i.id})">⚙ Opciones${i.opciones&&i.opciones.length?' ('+i.opciones.length+')':''}</button><button class="btn-blue" onclick="startEditItem(${i.id})">✎ Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`;
+    return`<div class="item-edit-row" id="itemrow-${i.id}"${drag}>${handle}<span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}${i.extras&&i.extras.length?' <span title="Adicionales que se preguntan" style="font-size:10px;background:#FAEEDA;color:#633806;border-radius:4px;padding:1px 5px">➕'+i.extras.length+'</span>':''}${i.conBebida?' <span title="Incluye bebida" style="font-size:11px">🥤</span>':''}${i.esBebidaIncluible?' <span title="Bebida incluible" style="font-size:10px;background:#DCFCE7;color:#166534;border-radius:4px;padding:1px 5px">incluible</span>':''}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-sec" style="width:auto;padding:6px 10px;font-size:12px;${(i.opciones&&i.opciones.length)||(i.extras&&i.extras.length)?'border-color:#8B5CF6;color:#5B21B6;background:#F3E8FF':''}" onclick="abrirEditorOpciones(${i.id})">⚙ Opciones</button><button class="btn-blue" onclick="startEditItem(${i.id})">✎ Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`;
   }).join(''))||`<div class="empty">No hay platillos en esta categoría</div>`;
   if(!canDrag&&filtered.length)list.innerHTML+='<div style="font-size:11px;color:#aaa;padding:6px 4px">Selecciona "Todas" para poder reordenar arrastrando</div>';
 }
 function setMenuAdminFiltro(cat){menuAdminCatFiltro=cat;renderMenuAdmin();}
 function startEditItem(id){
   const item=menu.find(i=>i.id===id);if(!item)return;const row=document.getElementById("itemrow-"+id);if(!row)return;
-  row.innerHTML=`<input class="edit-mini" style="width:40px" value="${item.emoji}" id="ei-em-${id}"><input class="edit-mini" style="flex:1;min-width:120px" value="${item.name}" id="ei-nm-${id}"><select class="edit-mini" id="ei-cat-${id}">${cats.map(c=>`<option${c===item.cat?" selected":""}>${c}</option>`).join("")}</select><input class="edit-mini" style="width:90px" type="number" value="${item.price}" id="ei-pr-${id}"><label style="font-size:11px;color:#555;white-space:nowrap;cursor:pointer"><input type="checkbox" id="ei-px-${id}" ${item.pedirExtras?'checked':''}> Preguntar adicionales</label><label style="font-size:11px;color:#555;white-space:nowrap;cursor:pointer"><input type="checkbox" id="ei-cb-${id}" ${item.conBebida?'checked':''}> Incluye bebida</label><label style="font-size:11px;color:#555;white-space:nowrap;cursor:pointer"><input type="checkbox" id="ei-bi-${id}" ${item.esBebidaIncluible?'checked':''}> Es bebida incluible</label><button class="btn-green" onclick="saveEditItem(${id})">\u2713 Guardar</button><button class="btn-sec" style="width:auto;padding:6px 10px" onclick="renderMenuAdmin()">Cancelar</button>`;
+  row.innerHTML=`<input class="edit-mini" style="width:40px" value="${item.emoji}" id="ei-em-${id}"><input class="edit-mini" style="flex:1;min-width:120px" value="${item.name}" id="ei-nm-${id}"><select class="edit-mini" id="ei-cat-${id}">${cats.map(c=>`<option${c===item.cat?" selected":""}>${c}</option>`).join("")}</select><input class="edit-mini" style="width:90px" type="number" value="${item.price}" id="ei-pr-${id}"><label style="font-size:11px;color:#555;white-space:nowrap;cursor:pointer"><input type="checkbox" id="ei-cb-${id}" ${item.conBebida?'checked':''}> Incluye bebida</label><label style="font-size:11px;color:#555;white-space:nowrap;cursor:pointer"><input type="checkbox" id="ei-bi-${id}" ${item.esBebidaIncluible?'checked':''}> Es bebida incluible</label><button class="btn-green" onclick="saveEditItem(${id})">\u2713 Guardar</button><button class="btn-sec" style="width:auto;padding:6px 10px" onclick="renderMenuAdmin()">Cancelar</button>`;
 }
 function saveEditItem(id){
   const item=menu.find(i=>i.id===id);if(!item)return;
@@ -3781,7 +3822,6 @@ function saveEditItem(id){
   item.name=nm;item.price=pr;item.emoji=em;item.cat=cat;
   if(cbEl)item.conBebida=cbEl.checked;else delete item.conBebida;
   if(biEl)item.esBebidaIncluible=biEl.checked;else delete item.esBebidaIncluible;
-  const pxEl=document.getElementById("ei-px-"+id);if(pxEl)item.pedirExtras=pxEl.checked;
   saveLS();renderMenuAdmin();_programarEnvioMenu();toast("Platillo actualizado");
 }
 function addMenuItem(){
@@ -3791,10 +3831,9 @@ function addMenuItem(){
   const newItem={id:nextMid++,name:nm,price:pr,cat,emoji:em};
   if(cb&&cb.checked)newItem.conBebida=true;
   if(bi&&bi.checked)newItem.esBebidaIncluible=true;
-  const px=document.getElementById("maPx");if(px&&px.checked)newItem.pedirExtras=true;
   menu.push(newItem);
   document.getElementById("maNm").value="";document.getElementById("maPr").value="";document.getElementById("maEm").value="";
-  if(cb)cb.checked=false;if(bi)bi.checked=false;if(px)px.checked=false;
+  if(cb)cb.checked=false;if(bi)bi.checked=false;
   saveLS();renderMenuAdmin();_programarEnvioMenu();toast("\u2713 Platillo agregado");
 }
 function delMenuItem(id){if(!confirm("Eliminar este platillo del menu?"))return;menu=menu.filter(i=>i.id!==id);saveLS();renderMenuAdmin();_programarEnvioMenu();}
@@ -4085,20 +4124,20 @@ function saveLS(){
     // ⚠️ ORDEN CRÍTICO: guardar cierres ANTES que ventas.
     // Si la luz se va a mitad del guardado, es mejor tener el cierre
     // con ventas duplicadas (corregible) que ventas borradas sin cierre (pérdida).
-    localStorage.setItem('rpos_cierres',JSON.stringify(cierresParaGuardar));
-    localStorage.setItem('rpos_ventas',JSON.stringify(ventas));
-    localStorage.setItem('rpos_gastos',JSON.stringify(gastos));
-    localStorage.setItem('rpos_users',JSON.stringify(users));
-    localStorage.setItem('rpos_menu',JSON.stringify(menu));
-    localStorage.setItem('rpos_cats',JSON.stringify(cats));
-    localStorage.setItem('rpos_cajaBilletes',JSON.stringify(cajaBilletes));
-    localStorage.setItem('rpos_cajainicial',cajainicial);
-    localStorage.setItem('rpos_orders',JSON.stringify(orders));
-    localStorage.setItem('rpos_nextMid',nextMid);
-    localStorage.setItem('rpos_nextVid',nextVid);
-    localStorage.setItem('rpos_nextUid',nextUid);
-    localStorage.setItem('rpos_ticketConfig',JSON.stringify(ticketConfig));
-    localStorage.setItem('rpos_mesas',JSON.stringify(mesas));
+    _lsP.setItem('rpos_cierres',JSON.stringify(cierresParaGuardar));
+    _lsP.setItem('rpos_ventas',JSON.stringify(ventas));
+    _lsP.setItem('rpos_gastos',JSON.stringify(gastos));
+    _lsP.setItem('rpos_users',JSON.stringify(users));
+    _lsP.setItem('rpos_menu',JSON.stringify(menu));
+    _lsP.setItem('rpos_cats',JSON.stringify(cats));
+    _lsP.setItem('rpos_cajaBilletes',JSON.stringify(cajaBilletes));
+    _lsP.setItem('rpos_cajainicial',cajainicial);
+    _lsP.setItem('rpos_orders',JSON.stringify(orders));
+    _lsP.setItem('rpos_nextMid',nextMid);
+    _lsP.setItem('rpos_nextVid',nextVid);
+    _lsP.setItem('rpos_nextUid',nextUid);
+    _lsP.setItem('rpos_ticketConfig',JSON.stringify(ticketConfig));
+    _lsP.setItem('rpos_mesas',JSON.stringify(mesas));
     return true;
   }catch(e){
     // Error crítico: el localStorage está lleno o bloqueado
@@ -4119,7 +4158,7 @@ function saveLS(){
 ══════════════════════════════════════════════════════════════════ */
 function _initArchivoHistorial(){
   if(!window.indexedDB)return;
-  const req=indexedDB.open('rpos_historial_v1',1);
+  const req=indexedDB.open('rpos_PRUEBA_historial_v1',1);
   req.onupgradeneeded=function(e){
     const db=e.target.result;
     if(!db.objectStoreNames.contains('ventas')){
@@ -4142,7 +4181,7 @@ function _initArchivoHistorial(){
 // Migración única: pasar los datos ya existentes en localStorage al archivo histórico
 function _migrarAIDB(){
   const MIG_KEY='rpos_idb_migrado_v1';
-  if(localStorage.getItem(MIG_KEY))return;
+  if(_lsP.getItem(MIG_KEY))return;
   // Ventas del periodo actual
   ventas.forEach(function(v){_archivarVenta(v);});
   // Ventas de cierres guardados con ventasList
@@ -4150,7 +4189,7 @@ function _migrarAIDB(){
     if(c.ventasList)c.ventasList.forEach(function(v){_archivarVenta(v);});
     _archivarCierre(c);
   });
-  localStorage.setItem(MIG_KEY,'1');
+  _lsP.setItem(MIG_KEY,'1');
 }
 // Guardar una venta en el archivo histórico (fire-and-forget)
 function _archivarVenta(v){
@@ -4190,10 +4229,10 @@ function _buscarCierreArchivo(fechaISO,turno,callback){
 /* ── RESPALDO ── */
 function checkAutoRespaldo(){
   const KEY='rpos_lastAutoRespaldo';
-  const ultimo=localStorage.getItem(KEY);
+  const ultimo=_lsP.getItem(KEY);
   const ahora=new Date();
   // Si nunca se ha hecho respaldo automático, guardar fecha de hoy sin descargar
-  if(!ultimo){localStorage.setItem(KEY,ahora.toISOString());return;}
+  if(!ultimo){_lsP.setItem(KEY,ahora.toISOString());return;}
   const debePasarFecha=new Date(ahora.getFullYear(),ahora.getMonth()-1,ahora.getDate());
   if(new Date(ultimo)>debePasarFecha)return; // menos de un mes, no hace nada
   // Ya pasó un mes — hacer respaldo automático
@@ -4211,7 +4250,7 @@ function checkAutoRespaldo(){
   a.download='soda-el-tucan-auto-'+mes+'.json';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  localStorage.setItem(KEY,ahora.toISOString());
+  _lsP.setItem(KEY,ahora.toISOString());
   toast('📦 Respaldo automático del mes guardado en Descargas');
 }
 function exportarRespaldo(){
@@ -4263,20 +4302,20 @@ function importarRespaldo(input){
 
 function loadLS(){
   try{
-    const u=localStorage.getItem('rpos_users');if(u)users=JSON.parse(u);
-    const m=localStorage.getItem('rpos_menu');if(m)menu=JSON.parse(m);
-    const c=localStorage.getItem('rpos_cats');if(c)cats=JSON.parse(c);
-    const v=localStorage.getItem('rpos_ventas');if(v)ventas=JSON.parse(v);
-    const g=localStorage.getItem('rpos_gastos');if(g)gastos=JSON.parse(g);
-    const ci=localStorage.getItem('rpos_cierres');if(ci)cierres=JSON.parse(ci);
-    const cb=localStorage.getItem('rpos_cajaBilletes');if(cb)cajaBilletes=JSON.parse(cb);
-    const ci2=localStorage.getItem('rpos_cajainicial');if(ci2){const v=parseFloat(ci2);if(!isNaN(v))cajainicial=v;}
-    const ord=localStorage.getItem('rpos_orders');if(ord)orders=JSON.parse(ord);
-    const nmi=localStorage.getItem('rpos_nextMid');if(nmi)nextMid=parseInt(nmi);
-    const nvi=localStorage.getItem('rpos_nextVid');if(nvi)nextVid=parseInt(nvi);
-    const nui=localStorage.getItem('rpos_nextUid');if(nui)nextUid=parseInt(nui);
-    const tc=localStorage.getItem('rpos_ticketConfig');if(tc)ticketConfig={...ticketConfig,...JSON.parse(tc)};
-    const ms=localStorage.getItem('rpos_mesas');if(ms){const _m=JSON.parse(ms);
+    const u=_lsP.getItem('rpos_users');if(u)users=JSON.parse(u);
+    const m=_lsP.getItem('rpos_menu');if(m)menu=JSON.parse(m);
+    const c=_lsP.getItem('rpos_cats');if(c)cats=JSON.parse(c);
+    const v=_lsP.getItem('rpos_ventas');if(v)ventas=JSON.parse(v);
+    const g=_lsP.getItem('rpos_gastos');if(g)gastos=JSON.parse(g);
+    const ci=_lsP.getItem('rpos_cierres');if(ci)cierres=JSON.parse(ci);
+    const cb=_lsP.getItem('rpos_cajaBilletes');if(cb)cajaBilletes=JSON.parse(cb);
+    const ci2=_lsP.getItem('rpos_cajainicial');if(ci2){const v=parseFloat(ci2);if(!isNaN(v))cajainicial=v;}
+    const ord=_lsP.getItem('rpos_orders');if(ord)orders=JSON.parse(ord);
+    const nmi=_lsP.getItem('rpos_nextMid');if(nmi)nextMid=parseInt(nmi);
+    const nvi=_lsP.getItem('rpos_nextVid');if(nvi)nextVid=parseInt(nvi);
+    const nui=_lsP.getItem('rpos_nextUid');if(nui)nextUid=parseInt(nui);
+    const tc=_lsP.getItem('rpos_ticketConfig');if(tc)ticketConfig={...ticketConfig,...JSON.parse(tc)};
+    const ms=_lsP.getItem('rpos_mesas');if(ms){const _m=JSON.parse(ms);
       if(_m&&_m.length){
         // Migrar formato viejo (array de strings) al nuevo (array de objetos)
         if(typeof _m[0]==='string'){
@@ -4284,14 +4323,14 @@ function loadLS(){
           if(!isOld)mesas=_m.map(function(n,i){const p=_mesaDefaultPos(i);return{id:i+1,nombre:n,x:p.x,y:p.y,w:130,h:100,shape:'rect'};});
         } else {
           // Si ya tiene versión de pantalla guardada, usar posiciones guardadas
-          const _posVer=localStorage.getItem('rpos_mesas_posver')||'0';
+          const _posVer=_lsP.getItem('rpos_mesas_posver')||'0';
           if(_posVer==='screen-v1'){
             mesas=_m;
           } else {
             // Primera vez o migración: calcular según pantalla actual y guardar
             mesas=_buildMesasDefault(window.innerWidth-64);
-            localStorage.setItem('rpos_mesas',JSON.stringify(mesas));
-            localStorage.setItem('rpos_mesas_posver','screen-v1');
+            _lsP.setItem('rpos_mesas',JSON.stringify(mesas));
+            _lsP.setItem('rpos_mesas_posver','screen-v1');
           }
         }
       }
@@ -4619,8 +4658,8 @@ try{
     sessionStorage.setItem('rpos_my_tab_id',MY_ID);
   }
   const miId=sessionStorage.getItem('rpos_my_tab_id');
-  const idActivo=localStorage.getItem(ID_KEY);
-  const hbActivo=parseInt(localStorage.getItem(HB_KEY)||'0');
+  const idActivo=_lsP.getItem(ID_KEY);
+  const hbActivo=parseInt(_lsP.getItem(HB_KEY)||'0');
   const hayOtraInstancia=idActivo&&idActivo!==miId&&(Date.now()-hbActivo<12000);
   if(hayOtraInstancia){
     // Bloquear esta pestaña completamente
@@ -4635,26 +4674,27 @@ try{
       +'<div style="font-size:12px;color:#aaa;margin-top:20px">Cerrá la otra pestaña/ventana y hacé clic en "Verificar de nuevo"</div>'
     +'</div>';
     window._tomarControl=function(){
-      localStorage.setItem(ID_KEY,miId);
-      localStorage.setItem(HB_KEY,Date.now());
+      _lsP.setItem(ID_KEY,miId);
+      _lsP.setItem(HB_KEY,Date.now());
       location.reload();
     };
     throw new Error('POS_BLOCKED_DUPLICATE_TAB'); // detiene el resto del init
   }
   // Esta instancia es la activa — registrar y empezar heartbeat
-  localStorage.setItem(ID_KEY,miId);
-  localStorage.setItem(HB_KEY,Date.now());
-  setInterval(function(){localStorage.setItem(HB_KEY,Date.now());},5000);
+  _lsP.setItem(ID_KEY,miId);
+  _lsP.setItem(HB_KEY,Date.now());
+  setInterval(function(){_lsP.setItem(HB_KEY,Date.now());},5000);
   // Limpiar al cerrar
   window.addEventListener('beforeunload',function(){
-    if(localStorage.getItem(ID_KEY)===miId){
-      localStorage.removeItem(ID_KEY);
-      localStorage.removeItem(HB_KEY);
+    if(_lsP.getItem(ID_KEY)===miId){
+      _lsP.removeItem(ID_KEY);
+      _lsP.removeItem(HB_KEY);
     }
   });
 })();
 loadLS();
 _migrarOpcionesV1();
+_migrarExtrasV2();
 _initArchivoHistorial(); // iniciar archivo histórico en IndexedDB (después de loadLS para migrar datos existentes)
 ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(b)b.style.display="none";});
 if(TABLET_MODE){
