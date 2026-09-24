@@ -328,10 +328,14 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
         <div style="min-width:70px"><label>Emoji</label><input class="fi" id="maEm" placeholder="&#127869;" style="width:70px"></div>
         <div style="min-width:110px"><label>Precio</label><input class="fi" id="maPr" type="number" inputmode="decimal"></div>
         <div style="min-width:130px"><label>Categoria</label><select class="fi" id="maCat"></select></div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;justify-content:flex-end">
+          <label style="font-size:12px;color:#555;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="maCb"> Incluye bebida</label>
+          <label style="font-size:12px;color:#555;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="maBi"> Bebida incluible (natural/café)</label>
+        </div>
         <div style="display:flex;align-items:flex-end"><button class="btn-green" onclick="addMenuItem()">Agregar</button></div>
       </div>
     </div>
-    <div class="card"><div class="section-title">Platillos actuales</div><div id="menuFiltroBar" style="margin-bottom:10px"></div><div id="menuList"></div></div>
+    <div class="card"><div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Platillos actuales</span><button class="btn-blue" style="font-size:12px" onclick="_enviarMenuTablet(false)">&#128242; Enviar menú a tablet</button></div><div id="menuFiltroBar" style="margin-bottom:10px"></div><div id="menuList"></div></div>
   </div>
   <div id="mpanel-categorias" style="display:none">
     <div class="card" style="max-width:420px">
@@ -427,6 +431,10 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
 </div>
 
 <script>
+/* ── MODO SIN INTERNET: guardar copia del sistema en la compu (service worker) ── */
+if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(function(){});}
+// Si no hay internet y todavía no hay copia guardada, avisar antes de recargar/cerrar la página
+window.addEventListener('beforeunload',function(e){if(location.protocol==='https:'&&!navigator.onLine&&!(navigator.serviceWorker&&navigator.serviceWorker.controller)){e.preventDefault();e.returnValue='';}});
 const ALL_SCREENS=["salon","ventas","gastos","cierre","menu-admin","usuarios"];
 
 /* ── TABLET MODE ── */
@@ -450,8 +458,8 @@ let cats=["Almuerzos","Especiales","Sopas","Gallos","Pastas","Bebidas","Desayuno
 const catColors={"Almuerzos":{bg:"#E6F1FB",cl:"#0C447C"},"Especiales":{bg:"#EAF3DE",cl:"#27500A"},"Sopas":{bg:"#FAEEDA",cl:"#633806"},"Gallos":{bg:"#FAECE7",cl:"#4A1B0C"},"Pastas":{bg:"#EEEDFE",cl:"#26215C"},"Bebidas":{bg:"#FBEAF0",cl:"#4B1528"},"Desayunos":{bg:"#E1F5EE",cl:"#04342C"},"Antojitos":{bg:"#FCEBEB",cl:"#501313"},"+Proteínas":{bg:"#F1EFE8",cl:"#2C2C2A"},"+Acomp.":{bg:"#E1F5EE",cl:"#085041"},"+Salsas":{bg:"#FAEEDA",cl:"#854F0B"},"+Snacks":{bg:"#FCEBEB",cl:"#A32D2D"},"+Bebidas Ad.":{bg:"#EEEDFE",cl:"#3C3489"},"+Varios":{bg:"#F1EFE8",cl:"#444441"}};
 let menu=[
   /* ALMUERZOS */
-  {id:1,name:"Casado con Proteína",price:4500,cat:"Almuerzos",emoji:"\uD83C\uDF7D"},
-  {id:2,name:"Casado con Lengua en Salsa",price:5500,cat:"Almuerzos",emoji:"\uD83C\uDF7D"},
+  {id:1,name:"Casado con Proteína",price:4500,cat:"Almuerzos",emoji:"\uD83C\uDF7D",conBebida:true,pedirExtras:true},
+  {id:2,name:"Casado con Lengua en Salsa",price:5500,cat:"Almuerzos",emoji:"\uD83C\uDF7D",conBebida:true,pedirExtras:true},
   /* ESPECIALES */
   {id:3,name:"Arroz con Pollo",price:5000,cat:"Especiales",emoji:"\uD83C\uDF5A"},
   {id:4,name:"Arroz Cantonés",price:5000,cat:"Especiales",emoji:"\uD83C\uDF5A"},
@@ -480,29 +488,29 @@ let menu=[
   {id:24,name:"Espagueti Carbonara",price:5000,cat:"Pastas",emoji:"\uD83C\uDF5D"},
   {id:25,name:"Espagueti con Camarones",price:6000,cat:"Pastas",emoji:"\uD83C\uDF5D"},
   /* BEBIDAS */
-  {id:26,name:"Café Negro",price:1200,cat:"Bebidas",emoji:"\u2615"},
-  {id:27,name:"Café con Leche",price:1300,cat:"Bebidas",emoji:"\u2615"},
+  {id:26,name:"Café Negro",price:1200,cat:"Bebidas",emoji:"\u2615",esBebidaIncluible:true},
+  {id:27,name:"Café con Leche",price:1300,cat:"Bebidas",emoji:"\u2615",esBebidaIncluible:true},
   {id:28,name:"Gaseosa de Vidrio",price:1000,cat:"Bebidas",emoji:"\uD83C\uDF7E"},
-  {id:29,name:"Fresco Natural",price:1000,cat:"Bebidas",emoji:"\uD83E\uDD64"},
+  {id:29,name:"Fresco Natural",price:1000,cat:"Bebidas",emoji:"\uD83E\uDD64",esBebidaIncluible:true},
   {id:30,name:"Gaseosa Desechable",price:1200,cat:"Bebidas",emoji:"\uD83E\uDDE3"},
   {id:31,name:"Batido (Chocolate/Crema/Horchata)",price:2000,cat:"Bebidas",emoji:"\uD83E\uDD64"},
   /* DESAYUNOS */
-  {id:32,name:"Pinto con Huevo",price:3300,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:33,name:"Pinto con Natilla",price:3300,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:34,name:"Pinto con Chorizo",price:3500,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:35,name:"Pinto con Queso",price:3500,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:36,name:"Pinto con Huevos con Tomate",price:3800,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:37,name:"Pinto con Huevos con Jamón",price:3800,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:38,name:"Pinto con Huevos con Tosineta",price:3800,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:39,name:"Pinto con Hígado",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:40,name:"Pinto con Mondongo",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:41,name:"Pinto con Carne en Salsa",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:42,name:"Pinto con Pollo en Salsa",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:43,name:"Pinto con Carne Desmechada",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:44,name:"Pinto con Chuleta o Bistec",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:45,name:"Pinto con Omelette",price:3900,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:46,name:"Pinto con Huevos Rancheros",price:4000,cat:"Desayunos",emoji:"\uD83C\uDF73"},
-  {id:47,name:"Pinto con Lengua en Salsa",price:4500,cat:"Desayunos",emoji:"\uD83C\uDF73"},
+  {id:32,name:"Pinto con Huevo",price:3300,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73",opciones:[{pregunta:"¿Cómo quiere el huevo?",choices:[{texto:"Frito",sub:{pregunta:"¿Cómo lo quiere frito?",choices:[{texto:"Tierno"},{texto:"Bien cocido"}]}},{texto:"Revuelto"}]}]},
+  {id:33,name:"Pinto con Natilla",price:3300,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:34,name:"Pinto con Chorizo",price:3500,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:35,name:"Pinto con Queso",price:3500,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:36,name:"Pinto con Huevos con Tomate",price:3800,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:37,name:"Pinto con Huevos con Jamón",price:3800,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:38,name:"Pinto con Huevos con Tosineta",price:3800,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:39,name:"Pinto con Hígado",price:3900,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:40,name:"Pinto con Mondongo",price:3900,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:41,name:"Pinto con Carne en Salsa",price:3900,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:42,name:"Pinto con Pollo en Salsa",price:3900,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:43,name:"Pinto con Carne Desmechada",price:3900,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:44,name:"Pinto con Chuleta o Bistec",price:3900,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:45,name:"Pinto con Omelette",price:3900,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:46,name:"Pinto con Huevos Rancheros",price:4000,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
+  {id:47,name:"Pinto con Lengua en Salsa",price:4500,cat:"Desayunos",conBebida:true,pedirExtras:true,emoji:"\uD83C\uDF73"},
   /* ANTOJITOS */
   {id:48,name:"Papas Fritas",price:2500,cat:"Antojitos",emoji:"\uD83C\uDF5F"},
   {id:49,name:"Tostadas con Jale",price:1000,cat:"Antojitos",emoji:"\uD83C\uDF5E"},
@@ -816,7 +824,8 @@ function verifyLogin(){
     document.getElementById("loginOverlay").style.display="none";
     document.getElementById("activeUserLabel").textContent=u.name;
     _resetInactivity();
-    if(!TABLET_MODE)_iniciarPollTablet();
+    _iniciarPollTablet(); // siempre escuchar: compu principal recibe pedidos, tablet recibe cierres
+    if(TABLET_MODE)setTimeout(_pedirMenuTablet,1500); // pedir menú actualizado a la compu
     updateNav();
     // Cerrar automáticamente días anteriores sin cierre (antes de mostrar la caja)
     _verificarCierreAutomatico();
@@ -826,7 +835,7 @@ function verifyLogin(){
     // Preguntar caja inicial al arrancar el sistema (solo la primera vez del día)
     const _hoy=localISO();
     if(localStorage.getItem('rpos_cajaPedida')!==_hoy){
-      localStorage.setItem('rpos_cajaPedida',_hoy);
+      // NO marcar cajaPedida aquí — se marca solo cuando el usuario confirma
       setTimeout(showCajaInicialModal,500);
     }
   } else {
@@ -937,6 +946,7 @@ function renderSalon(){
     const w=m.w||130;const h=m.h||100;
     const isRound=m.shape==='round';
     const ord=orders[nombre];const occ=ord&&ord.items&&ord.items.length>0;
+    const tabletEnviado=TABLET_MODE&&occ&&ord.enviado===true;
     const sub=occ?ord.items.reduce(function(a,b){return a+b.price*b.qty;},0):0;
     const nm=nombre.replace(/'/g,"\\'");
     const posStyle='position:absolute;left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+h+'px;border-radius:'+(isRound?'50%':'12px')+';';
@@ -953,10 +963,12 @@ function renderSalon(){
       '</div>';
     }else{
       const fontSize=Math.min(34,Math.floor(w*0.28))+'px';
-      return'<div class="mesa'+(occ?' ocupada':'')+'" style="'+posStyle+'" onclick="openMesa(\''+nm+'\')">'+
-        '<div style="font-size:'+fontSize+';font-weight:900;line-height:1.1;color:'+(occ?'#E24B4A':'#1D9E75')+'">'+getMesaNum(nombre)+'</div>'+
+      const mesaColor=tabletEnviado?'#1E40AF':(occ?'#E24B4A':'#1D9E75');
+      const mesaInfo=tabletEnviado?('📤 '+ord.items.reduce(function(a,b){return a+b.qty;},0)+' enviado'+(ord.items.reduce(function(a,b){return a+b.qty;},0)!==1?'s':'')):(occ?fmt(sub)+' &middot; '+ord.items.reduce(function(a,b){return a+b.qty;},0)+' items':'Libre');
+      return'<div class="mesa'+(occ?' ocupada':'')+'" style="'+posStyle+(tabletEnviado?';border:3px solid #1E40AF;':'')+'" onclick="openMesa(\''+nm+'\')">'+
+        '<div style="font-size:'+fontSize+';font-weight:900;line-height:1.1;color:'+mesaColor+'">'+getMesaNum(nombre)+'</div>'+
         '<div class="mesa-nombre" style="margin-top:3px;font-size:'+(w<110?'11px':'13px')+'">'+nombre+'</div>'+
-        '<div class="mesa-info">'+(occ?fmt(sub)+' &middot; '+ord.items.reduce(function(a,b){return a+b.qty;},0)+' items':'Libre')+'</div>'+
+        '<div class="mesa-info">'+mesaInfo+'</div>'+
       '</div>';
     }
   }).join('');
@@ -1115,38 +1127,69 @@ function renderMesaModal(){
   /* ── MODO TABLET ── */
   if(TABLET_MODE){
     div.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:stretch;justify-content:center;padding:0;z-index:100;overflow:hidden";
-    const tabItemsFiltrados=menuBusqueda.trim()?menu.filter(i=>i.name.toLowerCase().includes(menuBusqueda.toLowerCase())):menu.filter(i=>i.cat===activeCat);
-    const tabItems=tabItemsFiltrados.map(i=>`<div onclick="addToOrder(${i.id})" style="background:#f8f8f6;border-radius:9px;padding:8px 6px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;user-select:none"><div style="font-size:20px;margin-bottom:3px">${i.emoji}</div><div style="font-size:11px;font-weight:600;color:#111;line-height:1.2;margin-bottom:2px">${i.name}</div><div style="font-size:12px;color:#1D9E75;font-weight:700">${fmt(i.price)}</div></div>`).join('')||`<div style="color:#999;padding:20px;text-align:center">${menuBusqueda?'Sin resultados':'Sin platillos'}</div>`;
+    const tabItemsFiltrados=menuBusqueda.trim()?menu.filter(function(i){return i.name.toLowerCase().includes(menuBusqueda.toLowerCase());}):menu.filter(function(i){return i.cat===activeCat;});
+    const tabItems=tabItemsFiltrados.map(_tabletCardHTML).join('')||'<div style="color:#999;padding:20px;text-align:center">'+(menuBusqueda?'Sin resultados':'Sin platillos')+'</div>';
     const tabMainAvail=availCats.filter(function(c){return!c.startsWith('+');});
     const tabAddAvail=availCats.filter(function(c){return c.startsWith('+');});
     const tabAdicionalesActivo=activeCat.startsWith('+');
-    let tabCatsMain=tabMainAvail.map(function(c){const clr=catColors[c]||{bg:'#f0f0f0',cl:'#444'};return'<button onclick="setMesaCat(\''+c.replace(/'/g,"\\'")+'\');" style="padding:9px 18px;border-radius:20px;border:none;background:'+clr.bg+';color:'+clr.cl+';font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap'+(c===activeCat?';outline:2.5px solid #1D9E75;outline-offset:2px':'')+'">' +c+'</button>';}).join('');
-    if(tabAddAvail.length)tabCatsMain+='<button onclick="setMesaAdicionales();" style="padding:9px 18px;border-radius:20px;border:none;background:#FAEEDA;color:#633806;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap'+(tabAdicionalesActivo?';outline:2.5px solid #1D9E75;outline-offset:2px':'')+'">'+(tabAdicionalesActivo?'&#9660;':'&#9658;')+' Adicionales</button>';
-    let tabCatsAdd='';
-    if(tabAdicionalesActivo&&tabAddAvail.length){tabCatsAdd='<div style="display:flex;gap:7px;flex-wrap:wrap;padding-top:8px;margin-top:6px;border-top:2px dashed #e8d8c0">'+tabAddAvail.map(function(c){const clr=catColors[c]||{bg:'#f0f0f0',cl:'#444'};return'<button onclick="setMesaCat(\''+c.replace(/'/g,"\\'")+'\');" style="padding:9px 18px;border-radius:20px;border:none;background:'+clr.bg+';color:'+clr.cl+';font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap'+(c===activeCat?';outline:2.5px solid #1D9E75;outline-offset:2px':'')+'">' +c.replace(/^\+/,'')+'</button>';}).join('')+'</div>';}
+    const _catBtn=function(c,label){const clr=catColors[c]||{bg:'#f0f0f0',cl:'#444'};return'<button onclick="setMesaCat(\''+c.replace(/'/g,"\\'")+'\')" style="padding:9px 18px;border-radius:20px;border:none;background:'+clr.bg+';color:'+clr.cl+';font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap'+(c===activeCat?';outline:2.5px solid #1D9E75;outline-offset:2px':'')+'">'+label+'</button>';};
+    let tabCatsMain=tabMainAvail.map(function(c){return _catBtn(c,c);}).join('');
+    if(tabAddAvail.length)tabCatsMain+='<button onclick="setMesaAdicionales()" style="padding:9px 18px;border-radius:20px;border:none;background:#FAEEDA;color:#633806;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap'+(tabAdicionalesActivo?';outline:2.5px solid #1D9E75;outline-offset:2px':'')+'">'+(tabAdicionalesActivo?'&#9660;':'&#9658;')+' Adicionales</button>';
+    const tabCatsAdd=(tabAdicionalesActivo&&tabAddAvail.length)?'<div style="display:flex;gap:7px;flex-wrap:wrap;padding-top:8px;margin-top:6px;border-top:2px dashed #e8d8c0">'+tabAddAvail.map(function(c){return _catBtn(c,c.replace(/^\+/,''));}).join('')+'</div>':'';
     const tabCats='<div style="display:flex;gap:7px;flex-wrap:wrap">'+tabCatsMain+'</div>'+tabCatsAdd;
-    div.innerHTML=`<div style="background:#fff;width:100%;max-width:960px;display:grid;grid-template-columns:1fr 270px;overflow:hidden">
-      <div class="modal-menu" style="overflow-y:auto;padding:16px;border-right:1px solid #eee;display:flex;flex-direction:column;gap:12px">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-          <div style="font-size:18px;font-weight:700;color:#111">&#127860; ${activeMesa}</div>
-          <button onclick="closeMesa()" style="padding:8px 18px;border-radius:8px;border:1px solid #ddd;background:transparent;font-size:14px;cursor:pointer;color:#666">&times; Cerrar</button>
-        </div>
-        <div style="position:relative;flex-shrink:0;margin-bottom:4px">
-          <input type="text" id="menuBusqInput" value="${menuBusqueda.replace(/"/g,'&quot;')}" placeholder="🔍 Buscar platillo..." oninput="setMenuBusqueda(this.value)" style="width:100%;padding:8px 32px 8px 12px;border:1.5px solid ${menuBusqueda?'#1D9E75':'#ddd'};border-radius:10px;font-size:14px;outline:none;box-sizing:border-box">
-          ${menuBusqueda?`<button onclick="setMenuBusqueda('')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;font-size:18px;line-height:1">&times;</button>`:''}
-        </div>
-        <div id="menuCatTabs" style="flex-shrink:0;${menuBusqueda?'display:none':''}">${tabCats}</div>
-        <div id="menuItemsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:7px">${tabItems}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;padding:16px;background:#fafaf8">
-        <div style="font-size:15px;font-weight:700;color:#111;margin-bottom:10px;flex-shrink:0">Orden</div>
-        <div class="order-items-list" style="flex:1;overflow-y:auto;margin-bottom:10px;min-height:0">${orderRows}</div>
-        <hr style="border:none;border-top:1px solid #eee;margin:0 0 10px;flex-shrink:0">
-        <div style="font-size:12px;color:#888;margin-bottom:14px;flex-shrink:0">${ord.items.reduce((a,i)=>a+i.qty,0)} platillo(s)</div>
-        <button onclick="enviarACocina()" ${hasItems?'':'disabled'} style="width:100%;padding:15px;border-radius:12px;border:none;background:${hasItems?'#1D9E75':'#ccc'};color:#fff;font-size:15px;font-weight:700;cursor:${hasItems?'pointer':'default'};margin-bottom:8px;flex-shrink:0">&#128424; Enviar a Cocina</button>
-        <button onclick="closeMesa()" style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:13px;cursor:pointer;color:#666;flex-shrink:0">Cancelar</button>
-      </div>
-    </div>`;
+    const mq='\''+String(activeMesa).replace(/'/g,"\\'")+'\'';
+    const tabletOrderRows=!ord.items.length?'<div style="color:#999;padding:20px;text-align:center;font-size:13px">Sin items aún</div>':ord.items.map(function(o){
+      if(o.sub){
+        const pr=o.price===0?'<span style="color:#059669;font-weight:700">₡0 ✓</span>':'<span>'+fmt(o.price*o.qty)+'</span>';
+        return'<div style="display:flex;align-items:center;gap:6px;padding:2px 0 2px 24px;font-size:11px;color:#555">'
+          +'<span style="flex:1">'+(o.qty>1?o.qty+'× ':'')+o.name+'</span>'+pr
+          +'</div>';
+      }
+      const esLineaWizard=o.mid&&o.id!==o.mid;
+      const masAccion=esLineaWizard?'addToOrder('+o.mid+')':'adjQty('+mq+','+o.id+',1)';
+      const enviados=o.sentQty||0;
+      const todoEnviado=enviados>=o.qty;
+      const notaHTML=enviados>0
+        ?(o.nota?'<div style="width:100%;font-size:11px;color:#085041;background:#f0faf6;border-radius:6px;padding:4px 8px;margin-top:3px">📝 '+o.nota+'</div>':'')
+        :'<input type="text" inputmode="text" placeholder="✏️ Instrucción especial..." value="'+(o.nota||'').replace(/"/g,'&quot;')+'" oninput="setItemNota('+mq+','+o.id+',this.value)" style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid '+(o.nota?'#1D9E75':'#ddd')+';border-radius:8px;color:'+(o.nota?'#085041':'#888')+';background:'+(o.nota?'#f0faf6':'#fff')+';margin-top:3px;outline:none;box-sizing:border-box">';
+      return'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 0 3px;border-top:1px solid #eee">'
+        +(o.qty>enviados?'<button class="qb" onclick="adjQty('+mq+','+o.id+',-1)">&minus;</button>':'<span title="Ya enviado a cocina" style="width:26px;text-align:center;font-size:13px;flex-shrink:0">🔒</span>')
+        +'<span style="font-size:13px;font-weight:700;min-width:20px;text-align:center">'+o.qty+'</span>'
+        +'<button class="qb" onclick="'+masAccion+'">+</button>'
+        +'<span style="flex:1;font-size:12px;color:#111;font-weight:600;line-height:1.3">'+o.name+(todoEnviado?' <span style="font-size:9px;font-weight:600;color:#1E40AF;background:#E6F1FB;border-radius:4px;padding:1px 5px;white-space:nowrap">✓ enviado</span>':'')+'</span>'
+        +'<span style="font-size:12px;color:#666">'+fmt(o.price*o.qty)+'</span>'
+        +notaHTML
+        +'</div>';
+    }).join('');
+    const totalOrden=ord.items.reduce(function(a,i){return a+i.price*i.qty;},0);
+    const totalPlatos=ord.items.filter(function(i){return!i.sub;}).reduce(function(a,i){return a+i.qty;},0);
+    const itemsNuevos=ord.items.some(function(it){return(it.qty-(it.sentQty||0))>0;});
+    const estaEnviado=ord.enviado===true;
+    const btnLabel=estaEnviado?(itemsNuevos?'➕ Enviar adición':'✓ Todo enviado'):'📨 Enviar a Cocina';
+    const btnActivo=!estaEnviado||itemsNuevos;
+    const btnBg=btnActivo?(estaEnviado?'#1E40AF':'#1D9E75'):'#aaa';
+    div.innerHTML='<div style="background:#fff;width:100%;max-width:960px;display:grid;grid-template-columns:1fr 290px;overflow:hidden">'
+      +'<div class="modal-menu" style="overflow-y:auto;padding:16px;border-right:1px solid #eee;display:flex;flex-direction:column;gap:12px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">'
+          +'<div style="font-size:18px;font-weight:700;color:#111">&#127860; '+activeMesa+'</div>'
+          +'<button onclick="closeMesa()" style="padding:8px 18px;border-radius:8px;border:1px solid #ddd;background:transparent;font-size:14px;cursor:pointer;color:#666">&times; Cerrar</button>'
+        +'</div>'
+        +'<div style="position:relative;flex-shrink:0">'
+          +'<input type="text" id="menuBusqInput" value="'+menuBusqueda.replace(/"/g,'&quot;')+'" placeholder="&#128269; Buscar platillo..." oninput="setMenuBusqueda(this.value)" style="width:100%;padding:8px 32px 8px 12px;border:1.5px solid '+(menuBusqueda?'#1D9E75':'#ddd')+';border-radius:10px;font-size:14px;outline:none;box-sizing:border-box">'
+          +(menuBusqueda?'<button onclick="setMenuBusqueda(\'\')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;font-size:18px;line-height:1">&times;</button>':'')
+        +'</div>'
+        +'<div id="menuCatTabs" style="flex-shrink:0;'+(menuBusqueda?'display:none':'')+'">'+tabCats+'</div>'
+        +'<div id="menuItemsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:7px">'+tabItems+'</div>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;padding:16px;background:#fafaf8">'
+        +'<div style="font-size:15px;font-weight:700;color:#111;margin-bottom:10px;flex-shrink:0">Orden</div>'
+        +'<div class="order-items-list" style="flex:1;overflow-y:auto;margin-bottom:10px;min-height:0">'+tabletOrderRows+'</div>'
+        +'<hr style="border:none;border-top:1px solid #eee;margin:0 0 8px;flex-shrink:0">'
+        +'<div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:12px;flex-shrink:0"><span>'+totalPlatos+' platillo(s)</span><strong style="color:#111">'+fmt(totalOrden)+'</strong></div>'
+        +'<button onclick="enviarACocina()" '+(btnActivo?'':'disabled')+' style="width:100%;padding:15px;border-radius:12px;border:none;background:'+btnBg+';color:#fff;font-size:15px;font-weight:700;cursor:'+(btnActivo?'pointer':'default')+';margin-bottom:8px;flex-shrink:0">'+btnLabel+'</button>'
+        +'<button onclick="closeMesa()" style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:13px;cursor:pointer;color:#666;flex-shrink:0">'+(ord.enviado?'Cerrar':'Cancelar')+'</button>'
+      +'</div>'
+    +'</div>';
     document.body.appendChild(div);_restoreScroll();return;
   }
 
@@ -1169,7 +1212,7 @@ function renderMesaModal(){
       </div>
       <div class="menu-items-header" style="position:relative;margin-bottom:8px">
         <input type="text" id="menuBusqInput" value="${menuBusqueda.replace(/"/g,'&quot;')}" placeholder="🔍 Buscar platillo..." oninput="setMenuBusqueda(this.value)" style="width:100%;padding:7px 30px 7px 10px;border:1.5px solid ${menuBusqueda?'#1D9E75':'#ddd'};border-radius:8px;font-size:13px;outline:none;box-sizing:border-box">
-        ${menuBusqueda?`<button onclick="setMenuBusqueda('')" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;font-size:16px;line-height:1">&times;</button>`:''}
+        ${menuBusqueda?`<button onclick="setMenuBusqueda(\'\')" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;font-size:16px;line-height:1">&times;</button>`:''}
       </div>
       <div id="menuCatTabs" class="cat-tabs" style="${menuBusqueda?'display:none':''}">${catTabs}</div>
       <div class="menu-items" id="menuItemsGrid">${items}</div>
@@ -1229,7 +1272,7 @@ function setMenuBusqueda(val){
   const filtered=q?menu.filter(function(i){return i.name.toLowerCase().includes(q);}):menu.filter(function(i){return i.cat===activeCat;});
   if(tabs)tabs.style.display=q?'none':'';
   if(TABLET_MODE){
-    grid.innerHTML=filtered.map(function(i){return'<div onclick="addToOrder('+i.id+')" style="background:#f8f8f6;border-radius:12px;padding:14px 8px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;user-select:none"><div style="font-size:26px;margin-bottom:6px">'+i.emoji+'</div><div style="font-size:12px;font-weight:600;color:#111;line-height:1.3;margin-bottom:4px">'+i.name+'</div><div style="font-size:13px;color:#1D9E75;font-weight:700">'+fmt(i.price)+'</div></div>';}).join('')||(q?'<div style="color:#999;padding:20px;text-align:center">Sin resultados</div>':'<div style="color:#999;padding:20px;text-align:center">Sin platillos</div>');
+    grid.innerHTML=filtered.map(_tabletCardHTML).join('')||(q?'<div style="color:#999;padding:20px;text-align:center">Sin resultados</div>':'<div style="color:#999;padding:20px;text-align:center">Sin platillos</div>');
   }else{
     grid.innerHTML=filtered.map(function(i){return'<div class="mi" onclick="addToOrder('+i.id+')"><div class="mi-em">'+i.emoji+'</div><div class="mi-nm">'+i.name+'</div><div class="mi-pr">'+fmt(i.price)+'</div></div>';}).join('')||(q?'<div class="empty">Sin resultados para "'+val+'"</div>':'<div class="empty">Sin platillos</div>');
   }
@@ -1237,9 +1280,307 @@ function setMenuBusqueda(val){
   const inp=document.getElementById('menuBusqInput');
   if(inp){const btn=inp.nextElementSibling;if(btn){btn.style.display=val?'':'none';}}
 }
-function addToOrder(id){const item=menu.find(i=>i.id===id);if(!item)return;const ord=orders[activeMesa];const ex=ord.items.find(i=>i.id===id);if(ex)ex.qty++;else ord.items.push({id,name:item.name,price:item.price,qty:1,nota:''});saveLS();renderMesaModal();}
+/* ── TARJETA DE PLATILLO (TABLET) ── */
+function _tabletCardHTML(i){
+  const tags=((i.opciones&&i.opciones.length)?'⚙':'')+((i.extras&&i.extras.length)?'➕':'')+(i.conBebida?'🥤':'');
+  return'<div onclick="addToOrder('+i.id+')" style="position:relative;background:#f8f8f6;border-radius:9px;padding:8px 6px;cursor:pointer;border:1px solid #e5e5e5;text-align:center;user-select:none">'
+    +(tags?'<div style="position:absolute;top:3px;right:5px;font-size:9px;opacity:.75">'+tags+'</div>':'')
+    +'<div style="font-size:20px;margin-bottom:3px">'+i.emoji+'</div>'
+    +'<div style="font-size:11px;font-weight:600;color:#111;line-height:1.2;margin-bottom:2px">'+i.name+'</div>'
+    +'<div style="font-size:12px;color:#1D9E75;font-weight:700">'+fmt(i.price)+'</div></div>';
+}
+
+/* ── ASISTENTE DE OPCIONES → ADICIONALES → BEBIDA (TABLET) ── */
+let _wz=null,_lidC=0;
+function _lineId(){_lidC=(_lidC+1)%1000;return Date.now()*1000+_lidC;}
+function _itemNecesitaWizard(mi){return!!(mi&&((mi.opciones&&mi.opciones.length)||(mi.extras&&mi.extras.length)||mi.conBebida));}
+function _extrasDeItem(mi){return(mi&&mi.extras||[]).map(function(id){return menu.find(function(m){return m.id===id;});}).filter(Boolean);}
+function _extrasDisponibles(){return menu.filter(function(m){return m.cat&&m.cat.startsWith('+');});}
+function _bebidasIncluibles(){return menu.filter(function(m){return m.esBebidaIncluible;});}
+function _wzItem(){return _wz?menu.find(function(m){return m.id===_wz.mid;}):null;}
+function _abrirWizard(mid){
+  const mi=menu.find(function(m){return m.id===mid;});if(!mi)return;
+  _wz={mid:mid,cola:JSON.parse(JSON.stringify(mi.opciones||[])),sel:[],extras:{},fase:'',hist:[]};
+  _wzAvanzar();
+}
+function _wzSnap(){_wz.hist.push(JSON.stringify({cola:_wz.cola,sel:_wz.sel,extras:_wz.extras,fase:_wz.fase}));}
+function _wzAtras(){
+  if(!_wz||!_wz.hist.length){_wzCerrar();return;}
+  const s=JSON.parse(_wz.hist.pop());_wz.cola=s.cola;_wz.sel=s.sel;_wz.extras=s.extras;_wz.fase=s.fase;_wzRender();
+}
+function _wzCerrar(){_wz=null;const m=document.getElementById('wizModal');if(m)m.remove();}
+function _wzAvanzar(){
+  const mi=_wzItem();if(!mi){_wzCerrar();return;}
+  if(_wz.cola.length){_wz.fase='opc';_wzRender();return;}
+  const orden=['opc','extras','bebida'];
+  const desde=Math.max(orden.indexOf(_wz.fase)+1,1);
+  for(let k=desde;k<orden.length;k++){
+    if(orden[k]==='extras'&&_extrasDeItem(mi).length){_wz.fase='extras';_wzRender();return;}
+    if(orden[k]==='bebida'&&mi.conBebida&&_bebidasIncluibles().length){_wz.fase='bebida';_wzRender();return;}
+  }
+  _wzFinalizar(0);
+}
+function _wzElegir(ci){
+  const q=_wz&&_wz.cola[0];const ch=q&&q.choices&&q.choices[ci];if(!ch)return;
+  _wzSnap();
+  _wz.cola.shift();
+  _wz.sel.push({t:ch.texto,p:parseInt(ch.precio)||0});
+  if(ch.sub&&ch.sub.choices&&ch.sub.choices.length)_wz.cola.unshift(ch.sub);
+  _wz.fase='opc';
+  _wzAvanzar();
+}
+function _wzExtra(mid,d){
+  if(!_wz)return;
+  const n=(_wz.extras[mid]||0)+d;
+  if(n>0)_wz.extras[mid]=n;else delete _wz.extras[mid];
+  _wzRender();
+}
+function _wzSeguirExtras(){if(!_wz)return;_wzSnap();_wz.fase='extras';_wzAvanzar();}
+function _wzFinalizar(bebMid){
+  const mi=_wzItem();const ord=orders[activeMesa];
+  if(!mi||!ord){_wzCerrar();return;}
+  const precioOpc=_wz.sel.reduce(function(a,s){return a+s.p;},0);
+  const det=_wz.sel.map(function(s){return s.t;}).filter(Boolean).join(' · ');
+  const pid=_lineId();
+  ord.items.push({id:pid,mid:mi.id,name:mi.name+(det?' ('+det+')':''),price:mi.price+precioOpc,qty:1,nota:''});
+  Object.keys(_wz.extras).forEach(function(k){
+    const ex=menu.find(function(m){return m.id===parseInt(k);});if(!ex)return;
+    ord.items.push({id:_lineId(),mid:ex.id,name:'↳ Extra: '+ex.name,price:ex.price,qty:_wz.extras[k],nota:'',sub:true,parent:pid});
+  });
+  if(bebMid){
+    const b=menu.find(function(m){return m.id===bebMid;});
+    if(b)ord.items.push({id:_lineId(),mid:b.id,name:'↳ Bebida: '+b.name+' (incluida)',price:0,qty:1,nota:'',sub:true,parent:pid,incluida:true});
+  }
+  _wzCerrar();saveLS();renderMesaModal();
+  toast('✓ '+mi.name+' agregado');
+}
+function _wzRender(){
+  const old=document.getElementById('wizModal');if(old)old.remove();
+  const mi=_wzItem();if(!mi)return;
+  const precioOpc=_wz.sel.reduce(function(a,s){return a+s.p;},0);
+  const precioExtras=Object.keys(_wz.extras).reduce(function(a,k){const e=menu.find(function(m){return m.id===parseInt(k);});return a+(e?e.price*_wz.extras[k]:0);},0);
+  const chips=_wz.sel.map(function(s){return'<span style="background:#E1F5EE;color:#085041;border-radius:12px;padding:3px 10px;font-size:12px;font-weight:600">'+s.t+(s.p?' +'+fmt(s.p):'')+'</span>';}).join('');
+  const bigBtn='padding:18px 12px;border-radius:14px;border:2px solid #e0e0e0;background:#fff;font-size:16px;font-weight:700;color:#111;cursor:pointer;min-height:70px';
+  let titulo='',cuerpo='',pie='';
+  if(_wz.fase==='opc'){
+    const q=_wz.cola[0];
+    titulo=q.pregunta||'Elegí una opción';
+    cuerpo='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">'
+      +q.choices.map(function(ch,ci){return'<button onclick="_wzElegir('+ci+')" style="'+bigBtn+'">'+ch.texto+(ch.precio?'<div style="font-size:12px;color:#1D9E75;margin-top:4px">+'+fmt(ch.precio)+'</div>':'')+'</button>';}).join('')
+      +'</div>';
+  }else if(_wz.fase==='extras'){
+    titulo='¿Algún adicional?';
+    const ex=_extrasDeItem(mi);
+    const grupos=[...new Set(ex.map(function(e){return e.cat;}))];
+    cuerpo=grupos.map(function(g){
+      return'<div style="font-size:12px;font-weight:700;color:#633806;margin:10px 0 6px">'+g.replace(/^\+/,'')+'</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:7px">'
+        +ex.filter(function(e){return e.cat===g;}).map(function(e){
+          const n=_wz.extras[e.id]||0;
+          return'<div style="position:relative;border-radius:10px;border:2px solid '+(n?'#1D9E75':'#e5e5e5')+';background:'+(n?'#E1F5EE':'#f8f8f6')+';padding:8px 6px;text-align:center;cursor:pointer;user-select:none" onclick="_wzExtra('+e.id+',1)">'
+            +(n?'<div onclick="event.stopPropagation();_wzExtra('+e.id+',-1)" style="position:absolute;top:-8px;left:-8px;width:24px;height:24px;border-radius:50%;background:#E24B4A;color:#fff;font-size:15px;line-height:24px;font-weight:700">&minus;</div><div style="position:absolute;top:-8px;right:-8px;min-width:24px;height:24px;border-radius:12px;background:#1D9E75;color:#fff;font-size:12px;line-height:24px;font-weight:700;padding:0 5px">'+n+'</div>':'')
+            +'<div style="font-size:18px">'+e.emoji+'</div><div style="font-size:11px;font-weight:600;color:#111;line-height:1.2">'+e.name+'</div><div style="font-size:11px;color:#1D9E75;font-weight:700">'+fmt(e.price)+'</div></div>';
+        }).join('')+'</div>';
+    }).join('');
+    const hay=Object.keys(_wz.extras).length>0;
+    pie='<button onclick="_wzSeguirExtras()" style="width:100%;padding:16px;border-radius:12px;border:none;background:#1D9E75;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-top:12px">'+(hay?'Continuar →':'Sin adicionales, seguir →')+'</button>';
+  }else if(_wz.fase==='bebida'){
+    titulo='🥤 Bebida incluida';
+    cuerpo='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">'
+      +_bebidasIncluibles().map(function(b){return'<button onclick="_wzFinalizar('+b.id+')" style="'+bigBtn+'"><div style="font-size:24px">'+b.emoji+'</div>'+b.name+'<div style="font-size:12px;color:#059669;margin-top:4px">₡0 incluida</div></button>';}).join('')
+      +'<button onclick="_wzFinalizar(0)" style="'+bigBtn+';color:#888;border-style:dashed">Sin bebida<div style="font-size:12px;font-weight:500;margin-top:4px">(la pide después)</div></button>'
+      +'</div>';
+  }
+  const d=document.createElement('div');d.id='wizModal';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:300';
+  d.innerHTML='<div style="background:#fff;border-radius:16px;width:100%;max-width:720px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden">'
+    +'<div style="padding:14px 18px;border-bottom:1px solid #eee;flex-shrink:0">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:15px;font-weight:700;color:#111">'+mi.emoji+' '+mi.name+'</div><div style="font-size:14px;font-weight:700;color:#1D9E75">'+fmt(mi.price+precioOpc+precioExtras)+'</div></div>'
+      +(chips?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+chips+'</div>':'')
+    +'</div>'
+    +'<div style="padding:16px 18px;overflow-y:auto;flex:1">'
+      +'<div style="font-size:20px;font-weight:800;color:#111;margin-bottom:14px">'+titulo+'</div>'
+      +cuerpo+pie
+    +'</div>'
+    +'<div style="display:flex;gap:8px;padding:12px 18px;border-top:1px solid #eee;flex-shrink:0">'
+      +'<button onclick="_wzAtras()" style="flex:1;padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;cursor:pointer;color:#444">'+(_wz.hist.length?'← Atrás':'Cancelar')+'</button>'
+      +(_wz.hist.length?'<button onclick="_wzCerrar()" style="flex:1;padding:12px;border-radius:10px;border:1px solid #f3c2c2;background:#fff;font-size:14px;cursor:pointer;color:#c0392b">&times; Cancelar platillo</button>':'')
+    +'</div>'
+  +'</div>';
+  document.body.appendChild(d);
+}
+
+/* ── EDITOR DE OPCIONES (ADMIN) ── */
+let _opcDraft=null,_opcItemId=null,_opcReg=[],_opcExtras=[],_opcExtrasCat=null;
+function _escA(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function _opcNuevaPregunta(){return{pregunta:'',choices:[{texto:''},{texto:''}]};}
+function abrirEditorOpciones(id){
+  if(!activeUser||activeUser.role!=='admin'){toast('Solo administradores pueden editar opciones');return;}
+  const it=menu.find(function(m){return m.id===id;});if(!it)return;
+  _opcItemId=id;_opcDraft=JSON.parse(JSON.stringify(it.opciones||[]));_opcExtras=(it.extras||[]).slice();_opcExtrasCat=null;
+  _renderEditorOpciones();
+}
+function _renderEditorOpciones(){
+  const old=document.getElementById('opcEditorModal');if(old)old.remove();
+  const it=menu.find(function(m){return m.id===_opcItemId;});if(!it)return;
+  _opcReg=[];
+  const inp='padding:7px 9px;border:1px solid #ddd;border-radius:7px;font-size:13px;box-sizing:border-box';
+  const sbtn='padding:5px 10px;border-radius:7px;border:1px solid #ddd;background:#fff;font-size:12px;cursor:pointer;white-space:nowrap';
+  function renderQ(q,owner,arr,idx,depth){
+    const qi=_opcReg.push({obj:q,owner:owner,arr:arr,idx:idx})-1;
+    let h='<div style="border:1px solid '+(depth?'#c7d2fe':'#d6d6d6')+';background:'+(depth?'#F5F7FF':'#fff')+';border-radius:10px;padding:10px;margin:8px 0">';
+    h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><span style="font-size:12px;font-weight:700;color:'+(depth?'#3730A3':'#555')+';white-space:nowrap">'+(depth?'↳ Si elige esa opción, preguntar:':'Pregunta:')+'</span>'
+      +'<input value="'+_escA(q.pregunta)+'" placeholder="Ej: ¿Cómo quiere el huevo?" oninput="_opcReg['+qi+'].obj.pregunta=this.value" style="flex:1;'+inp+'">'
+      +'<button onclick="_opcBorrar('+qi+')" style="'+sbtn+';color:#c0392b;border-color:#f3c2c2">&times; Quitar pregunta</button></div>';
+    q.choices.forEach(function(ch,ci){
+      const ri=_opcReg.push({obj:ch,owner:null,arr:q.choices,idx:ci})-1;
+      h+='<div style="margin-left:14px"><div style="display:flex;gap:6px;align-items:center;margin-bottom:5px"><span style="color:#999">•</span>'
+        +'<input value="'+_escA(ch.texto)+'" placeholder="Opción '+(ci+1)+'" oninput="_opcReg['+ri+'].obj.texto=this.value" style="flex:1;'+inp+'">'
+        +'<input type="number" inputmode="numeric" value="'+(ch.precio||'')+'" placeholder="+₡ extra" oninput="_opcReg['+ri+'].obj.precio=parseInt(this.value)||0" style="width:95px;'+inp+'">'
+        +(ch.sub?'':'<button onclick="_opcAddSub('+ri+')" style="'+sbtn+';color:#3730A3">+ Sub-pregunta</button>')
+        +'<button onclick="_opcBorrar('+ri+')" style="'+sbtn+';color:#c0392b">&times;</button></div>';
+      if(ch.sub)h+='<div style="margin-left:14px">'+renderQ(ch.sub,ch,null,null,depth+1)+'</div>';
+      h+='</div>';
+    });
+    h+='<button onclick="_opcAddChoice('+qi+')" style="'+sbtn+';margin-left:14px;color:#085041;border-color:#5DCAA5">+ Agregar opción</button></div>';
+    return h;
+  }
+  const cuerpo=_opcDraft.map(function(q,i){return renderQ(q,null,_opcDraft,i,0);}).join('')
+    ||'<div style="color:#999;font-size:13px;padding:14px;text-align:center;border:1px dashed #ddd;border-radius:10px">Este platillo no tiene preguntas. Tocá "+ Agregar pregunta".</div>';
+  const d=document.createElement('div');d.id='opcEditorModal';d.className='overlay-bg';
+  d.innerHTML='<div style="background:#fff;border-radius:12px;width:100%;max-width:760px;padding:18px;margin:auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:16px;font-weight:700">⚙ Opciones — '+_escA(it.name)+'</div><button onclick="_cerrarEditorOpciones()" style="'+sbtn+'">&times; Cerrar</button></div>'
+    +'<div style="font-size:14px;font-weight:700;color:#333;margin:4px 0">❓ Preguntas</div><div style="font-size:12px;color:#777;margin-bottom:10px;line-height:1.5">En la tablet, al tocar este platillo se hacen las preguntas en orden. Cada opción puede tener su propia sub-pregunta (ej: Frito → ¿Tierno o bien cocido?). El precio extra es opcional y se suma al platillo.</div>'
+    +cuerpo
+    +'<button onclick="_opcAddPregunta()" style="'+sbtn+';padding:9px 14px;margin-top:6px;color:#085041;border-color:#5DCAA5;font-weight:600">+ Agregar pregunta</button>'
+    +_htmlExtrasEditor()
+    +'<div style="display:flex;gap:8px;margin-top:16px"><button class="btn-green" style="flex:1;padding:11px" onclick="_guardarEditorOpciones()">✓ Guardar opciones</button><button class="btn-sec" style="flex:1" onclick="_cerrarEditorOpciones()">Cancelar</button></div>'
+  +'</div>';
+  document.body.appendChild(d);
+}
+function _htmlExtrasEditor(){
+  const todos=_extrasDisponibles();
+  const grupos=[...new Set(todos.map(function(e){return e.cat;}))];
+  if(!_opcExtrasCat||grupos.indexOf(_opcExtrasCat)<0)_opcExtrasCat=grupos[0]||null;
+  const sel=_opcExtras.map(function(id){return menu.find(function(m){return m.id===id;});}).filter(Boolean);
+  const chipSel=sel.map(function(e){return'<span style="display:inline-flex;align-items:center;gap:4px;background:#E1F5EE;color:#085041;border:1px solid #5DCAA5;border-radius:14px;padding:4px 6px 4px 10px;font-size:12px;font-weight:600">'+_escA(e.name)+'<button onclick="_opcToggleExtra('+e.id+')" style="border:none;background:none;color:#c0392b;cursor:pointer;font-size:14px;line-height:1;padding:0 2px">&times;</button></span>';}).join('');
+  const tabs=grupos.map(function(g){const act=g===_opcExtrasCat;return'<button onclick="_opcSetExtrasCat(\''+g.replace(/'/g,"\\'")+'\')" style="padding:5px 12px;border-radius:14px;border:1px solid '+(act?'#633806':'#e8d8c0')+';background:'+(act?'#FAEEDA':'#fff')+';color:#633806;font-size:12px;cursor:pointer;font-weight:'+(act?700:500)+'">'+_escA(g.replace(/^\+/,''))+'</button>';}).join('');
+  const lista=todos.filter(function(e){return e.cat===_opcExtrasCat;}).map(function(e){const on=_opcExtras.indexOf(e.id)>=0;return'<button onclick="_opcToggleExtra('+e.id+')" style="padding:6px 10px;border-radius:8px;border:1.5px solid '+(on?'#1D9E75':'#ddd')+';background:'+(on?'#E1F5EE':'#fff')+';color:#111;font-size:12px;cursor:pointer">'+(on?'✓ ':'')+_escA(e.name)+' <span style="color:#1D9E75">'+fmt(e.price)+'</span></button>';}).join('');
+  return'<div style="border-top:2px dashed #e8d8c0;margin-top:16px;padding-top:12px">'
+    +'<div style="font-size:14px;font-weight:700;color:#633806;margin-bottom:4px">➕ Adicionales que se preguntan</div>'
+    +'<div style="font-size:12px;color:#777;margin-bottom:8px">Solo estos aparecen en la tablet al pedir este platillo. Los demás se piden aparte desde la categoría Adicionales.</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;min-height:28px">'+(chipSel||'<span style="font-size:12px;color:#aaa">Ninguno — no se preguntan adicionales</span>')+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+tabs+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+lista+'</div>'
+  +'</div>';
+}
+function _opcToggleExtra(id){const i=_opcExtras.indexOf(id);if(i>=0)_opcExtras.splice(i,1);else _opcExtras.push(id);_renderEditorOpciones();}
+function _opcSetExtrasCat(g){_opcExtrasCat=g;_renderEditorOpciones();}
+function _opcBorrar(ri){const r=_opcReg[ri];if(!r)return;if(r.owner){delete r.owner.sub;}else if(r.arr){r.arr.splice(r.idx,1);}_renderEditorOpciones();}
+function _opcAddChoice(qi){const r=_opcReg[qi];if(!r)return;r.obj.choices.push({texto:''});_renderEditorOpciones();}
+function _opcAddSub(ri){const r=_opcReg[ri];if(!r)return;r.obj.sub=_opcNuevaPregunta();_renderEditorOpciones();}
+function _opcAddPregunta(){_opcDraft.push(_opcNuevaPregunta());_renderEditorOpciones();}
+function _opcLimpiar(q){
+  if(!q)return null;
+  const p=(q.pregunta||'').trim();
+  const ch=(q.choices||[]).map(function(c){
+    const t=(c.texto||'').trim();if(!t)return null;
+    const o={texto:t};const pr=parseInt(c.precio);if(pr>0)o.precio=pr;
+    const s=_opcLimpiar(c.sub);if(s)o.sub=s;
+    return o;
+  }).filter(Boolean);
+  if(!p||!ch.length)return null;
+  return{pregunta:p,choices:ch};
+}
+function _guardarEditorOpciones(){
+  const it=menu.find(function(m){return m.id===_opcItemId;});if(!it)return;
+  const limpio=_opcDraft.map(_opcLimpiar).filter(Boolean);
+  if(limpio.length)it.opciones=limpio;else delete it.opciones;
+  const exOk=_opcExtras.filter(function(id){return menu.some(function(m){return m.id===id;});});
+  if(exOk.length)it.extras=exOk;else delete it.extras;
+  delete it.pedirExtras;
+  saveLS();_cerrarEditorOpciones();renderMenuAdmin();_programarEnvioMenu();
+  toast('✓ Guardado — '+limpio.length+' pregunta(s), '+exOk.length+' adicional(es)');
+}
+function _cerrarEditorOpciones(){const m=document.getElementById('opcEditorModal');if(m)m.remove();_opcDraft=null;_opcReg=[];_opcExtras=[];}
+
+/* ── SYNC MENÚ COMPU → TABLET (por ntfy, en partes) ── */
+let _menuEnvioT=null,_menuChunks={},_menuUltimoTs=0,_menuReqResp=0;
+function _programarEnvioMenu(){
+  if(TABLET_MODE||!_getTabletTopic())return;
+  clearTimeout(_menuEnvioT);_menuEnvioT=setTimeout(function(){_enviarMenuTablet(true);},2000);
+}
+function _enviarMenuTablet(silencioso){
+  if(TABLET_MODE)return;
+  const topic=_getTabletTopic();
+  if(!topic){if(!silencioso)toast('⚠️ Configurá primero el tema tablet en Configuración');return;}
+  const data=JSON.stringify({menu:menu,cats:cats});
+  const sid=Date.now()+'_'+Math.floor(Math.random()*1e6);
+  const TAM=2000;const n=Math.ceil(data.length/TAM);
+  const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1';
+  let i=0;
+  (function enviar(){
+    if(i>=n){if(!silencioso)toast('✓ Menú enviado a la tablet');return;}
+    const payload=JSON.stringify({type:'menu_part',sid:sid,i:i,n:n,d:data.slice(i*TAM,(i+1)*TAM)});
+    fetch(url,{method:'POST',body:'menu '+(i+1)+'/'+n+'\n||'+payload})
+      .then(function(){i++;setTimeout(enviar,300);})
+      .catch(function(){if(!silencioso)toast('📡 Sin internet — no se pudo enviar el menú');});
+  })();
+}
+function _pedirMenuTablet(){
+  if(!TABLET_MODE)return;
+  const topic=_getTabletTopic();if(!topic)return;
+  fetch('https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1',{method:'POST',body:'menu_req\n||'+JSON.stringify({type:'menu_req',ts:Date.now()})}).catch(function(){});
+}
+function _recibirParteMenu(data){
+  if(!TABLET_MODE||!data.sid)return;
+  const ts=parseInt(data.sid)||0;
+  if(ts<=_menuUltimoTs)return;
+  const c=_menuChunks[data.sid]||(_menuChunks[data.sid]={n:data.n,p:{}});
+  c.p[data.i]=data.d;
+  if(Object.keys(c.p).length<c.n)return;
+  let txt='';for(let k=0;k<c.n;k++)txt+=c.p[k];
+  delete _menuChunks[data.sid];
+  let obj;try{obj=JSON.parse(txt);}catch(e){return;}
+  if(!obj||!Array.isArray(obj.menu))return;
+  _menuUltimoTs=ts;
+  menu=obj.menu;if(Array.isArray(obj.cats))cats=obj.cats;
+  saveLS();
+  if(activeMesa&&document.getElementById('mesaModal')&&!document.getElementById('wizModal'))renderMesaModal();
+  toast('📋 Menú actualizado desde la compu principal');
+}
+
+/* ── MIGRACIÓN: valores iniciales de bebida incluida / adicionales / opciones ── */
+const _OPC_HUEVO=[{pregunta:'¿Cómo quiere el huevo?',choices:[{texto:'Frito',sub:{pregunta:'¿Cómo lo quiere frito?',choices:[{texto:'Tierno'},{texto:'Bien cocido'}]}},{texto:'Revuelto'}]}];
+function _migrarExtrasV2(){
+  if(localStorage.getItem('rpos_mig_extras_v2'))return;
+  const porNombre=function(lista){return lista.map(function(n){const m=menu.find(function(x){return x.name===n&&x.cat&&x.cat.startsWith('+');});return m?m.id:null;}).filter(function(x){return x!==null;});};
+  const exDes=porNombre(['Huevos','Queso','Natilla','Plátano Maduro','Tortilla Mediana']);
+  const exCas=porNombre(['Huevos','Plátano Maduro','Ensalada','Arroz','Frijoles']);
+  menu.forEach(function(m){
+    if(m.pedirExtras&&!m.extras){const l=m.cat==='Desayunos'?exDes:exCas;if(l.length)m.extras=l.slice();}
+    delete m.pedirExtras;
+  });
+  localStorage.setItem('rpos_mig_extras_v2','1');
+  saveLS();
+}
+function _migrarOpcionesV1(){
+  if(localStorage.getItem('rpos_mig_opc_v1'))return;
+  menu.forEach(function(m){
+    if(m.cat==='Desayunos'||/^Casado/i.test(m.name)){
+      if(m.conBebida===undefined)m.conBebida=true;
+      if(m.pedirExtras===undefined)m.pedirExtras=true;
+    }
+    if(/^(Café Negro|Café con Leche|Fresco Natural)$/i.test(m.name)&&m.esBebidaIncluible===undefined)m.esBebidaIncluible=true;
+    if(/^Batido/i.test(m.name))delete m.esBebidaIncluible;
+    if(m.name==='Pinto con Huevo'&&!m.opciones)m.opciones=JSON.parse(JSON.stringify(_OPC_HUEVO));
+  });
+  localStorage.setItem('rpos_mig_opc_v1','1');
+  saveLS();
+}
+function addToOrder(id){const item=menu.find(i=>i.id===id);if(!item)return;if(TABLET_MODE&&_itemNecesitaWizard(item)){_abrirWizard(id);return;}const ord=orders[activeMesa];const ex=ord.items.find(i=>i.id===id&&!i.sub);if(ex)ex.qty++;else ord.items.push({id,mid:id,name:item.name,price:item.price,qty:1,nota:''});saveLS();renderMesaModal();}
 function setItemNota(mesa,id,val){const ord=orders[mesa];if(!ord)return;const it=ord.items.find(i=>i.id===id);if(it){it.nota=val;clearTimeout(setItemNota._t);setItemNota._t=setTimeout(saveLS,800);}}
-function adjQty(mesa,id,d){const ord=orders[mesa];const idx=ord.items.findIndex(i=>i.id===id);if(idx<0)return;ord.items[idx].qty+=d;if(ord.items[idx].qty<=0)ord.items.splice(idx,1);saveLS();renderMesaModal();}
+function adjQty(mesa,id,d){const ord=orders[mesa];const idx=ord.items.findIndex(i=>i.id===id);if(idx<0)return;if(TABLET_MODE&&d<0&&ord.items[idx].qty+d<(ord.items[idx].sentQty||0)){toast('🔒 Ya fue enviado a cocina — solo se puede quitar desde la compu principal');return;}ord.items[idx].qty+=d;if(ord.items[idx].qty<=0){const rid=ord.items[idx].id;ord.items.splice(idx,1);ord.items=ord.items.filter(i=>i.parent!==rid);}saveLS();renderMesaModal();}
 function editItemPrice(mesa,id){
   if(!activeUser||activeUser.role!=='admin'){toast('Solo administradores pueden cambiar el precio');return;}
   const ord=orders[mesa];const it=ord&&ord.items.find(i=>i.id===id);if(!it)return;
@@ -1431,6 +1772,7 @@ function confirmarPago(cobradoPor){
   _archivarVenta(ventaGuardada); // guardar en archivo histórico (IndexedDB)
   // Guardar la venta al disco PRIMERO antes de borrar la orden (protección contra corte de luz)
   try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
+  _enviarCierreMesaNtfy(activeMesa); // notificar tablet que la mesa fue cobrada
   orders[activeMesa]={items:[]};saveLS();closeEfModal();closeMesa();
   showTicket(ventaGuardada);
 }
@@ -2007,6 +2349,7 @@ function finalizarPagoSplit(cobradoPor){
   _archivarVenta(ventas[ventas.length-1]); // guardar en archivo histórico (IndexedDB)
   // Guardar venta al disco PRIMERO antes de borrar la orden
   try{localStorage.setItem('rpos_ventas',JSON.stringify(ventas));localStorage.setItem('rpos_nextVid',nextVid);}catch(e){}
+  _enviarCierreMesaNtfy(activeMesa); // notificar tablet que la mesa fue cobrada
   orders[activeMesa]={items:[]};
   splitGroups=[];splitAssignment={};splitEfBilletes={};splitEfQueue=[];
   const ventaGuardada=ventas[ventas.length-1];
@@ -2169,7 +2512,7 @@ function _ticketCSS(){
   return`<style>
     @page{size:80mm auto;margin:3mm}
     *{box-sizing:border-box;margin:0;padding:0;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    body{font-family:'Courier New',Courier,monospace;font-size:14px;padding:6px 8px;width:74mm;line-height:1.8;color:#000;font-weight:600}
+    body{font-family:'Courier New',Courier,monospace;font-size:14px;padding:6px 8px 40mm;width:74mm;line-height:1.8;color:#000;font-weight:600}
     .ticket-center{text-align:center}
     .ticket-row{display:flex;justify-content:space-between;gap:6px;font-weight:600}
     .ticket-row span:last-child{white-space:nowrap}
@@ -2723,20 +3066,31 @@ function buildCierreBodyHTML(c){
     '<div class="ticket-center" style="font-size:13px">'+c.fecha+' &mdash; Turno '+(c.turno||1)+'</div>'+
     '<div class="ticket-center" style="font-size:12px;margin-bottom:4px">'+c.numVentas+' orden'+(c.numVentas!==1?'es':'')+' atendida'+(c.numVentas!==1?'s':'')+'</div>'+
     '<hr class="ticket-hr-solid">'+
-    '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">GASTOS EXTERNOS</div>'+
-    (gastosExt.length?gastosExt.map(gastoRowExt).join(''):'<div class="ticket-row" style="font-size:12px"><span>Sin gastos externos</span><span>'+fmt2(0)+'</span></div>')+
-    (gastoExt?'<hr class="ticket-hr-dash">'+row('Total externos:',fmt2(gastoExt)):'')+
-    '<hr class="ticket-hr-solid">'+
-    '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">GASTOS DE CAJA</div>'+
-    (gastosCaja.length?gastosCaja.map(gastoRowCaja).join(''):'<div class="ticket-row" style="font-size:12px"><span>Sin gastos de caja</span><span>'+fmt2(0)+'</span></div>')+
-    (gastoCaja?'<hr class="ticket-hr-dash">'+row('Total gastos caja:',fmt2(gastoCaja)):'')+
-    '<hr class="ticket-hr-solid">'+
+    // GASTOS EXTERNOS — solo si hubo
+    (gastosExt.length?(
+      '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">GASTOS EXTERNOS</div>'+
+      gastosExt.map(gastoRowExt).join('')+
+      (gastoExt?'<hr class="ticket-hr-dash">'+row('Total externos:',fmt2(gastoExt)):'')+
+      '<hr class="ticket-hr-solid">'
+    ):'')+
+    // GASTOS DE CAJA — solo si hubo
+    (gastosCaja.length?(
+      '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">GASTOS DE CAJA</div>'+
+      gastosCaja.map(gastoRowCaja).join('')+
+      '<hr class="ticket-hr-dash">'+row('Total gastos caja:',fmt2(gastoCaja))+
+      '<hr class="ticket-hr-solid">'
+    ):'')+
+    // VENTAS
     '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">VENTAS DEL DIA</div>'+
+    (ef?row('Efectivo:',fmt2(ef)):'')+
+    (tc?row('Tarjeta:',fmt2(tc)):'')+
+    (si?row('SINPE:',fmt2(si)):'')+
     row('Total ventas:',fmt2(totalVentas))+
     (gastoCaja?row('Gastos de caja:','- '+fmt2(gastoCaja)):'')+
     '<hr class="ticket-hr-dash">'+
     '<div class="ticket-bold"><span>UTILIDAD:</span><span>'+fmt2(utilidad)+'</span></div>'+
     '<hr class="ticket-hr-solid">'+
+    // EFECTIVO EN CAJA — solo si hay caja inicial registrada
     ((c.cajainicial!==undefined&&c.cajainicial!==null)?(
       '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">EFECTIVO EN CAJA</div>'+
       row('Caja inicial:',fmt2(c.cajainicial||0))+
@@ -2746,13 +3100,6 @@ function buildCierreBodyHTML(c){
       '<div class="ticket-bold"><span>Efectivo en caja:</span><span>'+fmt2(c.efEnCaja!==undefined?c.efEnCaja:(c.cajainicial||0)+ef-gastoCaja)+'</span></div>'+
       '<hr class="ticket-hr-solid">'
     ):'')+
-    '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">METODO DE COBRO</div>'+
-    (efNeto?row('Efectivo (neto):',fmt2(efNeto)):'')+
-    (tc?row('Tarjeta:',fmt2(tc)):'')+
-    (si?row('SINPE:',fmt2(si)):'')+
-    '<hr class="ticket-hr-dash">'+
-    '<div class="ticket-bold"><span>SUMA:</span><span>'+fmt2(sumaNeta)+'</span></div>'+
-    '<hr class="ticket-hr-solid">'+
     (c.conteoFisico!=null?(
       '<div class="ticket-center" style="font-size:13px;font-weight:800;margin:4px 0 3px">CONTEO FÍSICO DE CAJA</div>'+
       row('Sistema espera:',fmt2(c.efEnCaja||0))+
@@ -2812,7 +3159,7 @@ function renderCierre(){
   }
   const cierresHoy=cierres.filter(function(c){return c.fechaISO===hoy;});
   const turnoNum=cierresHoy.length+1;
-  const diaTerminado=cierresHoy.length>=2;
+  const diaTerminado=cierresHoy.length>=9;
   const box=document.getElementById("cierreBox");
   const btns=document.getElementById("cierreBtns");
   if(!box)return;
@@ -3028,10 +3375,11 @@ function printCierreBorrador(){
 
 function hacerCierre(){
   if(_cierreEnProceso)return;
+  if(!ventas.length){toast('⚠️ No hay ventas registradas — no se puede hacer cierre con 0 ventas');return;}
   const hoy=localISO();
   const cierresHoy=cierres.filter(function(c){return c.fechaISO===hoy;}).length;
-  if(cierresHoy>=2){toast('Ya se realizaron los 2 cierres del día de hoy');return;}
-  const esFinDia=cierresHoy===1;
+  if(cierresHoy>=9){toast('Ya se realizaron los 9 cierres máximos del día de hoy');return;}
+  const esFinDia=false;
   const turnoNum=cierresHoy+1;
   const {ef,tc,si}=calcMetodos(ventas);
   const gastoCaja=gastos.filter(function(g){return g.tipo==='caja';}).reduce(function(a,g){return a+g.monto;},0);
@@ -3128,8 +3476,11 @@ function _confirmarCierreConConteo(turnoNum,esFinDia,efEnCaja,tcSistema){
     toast('Ingresá el monto físico en caja');if(inp)inp.focus();return;
   }
   const diferenciaCaja=conteoFisico-Math.round(efEnCaja);
-  // Datafono (opcional si no hubo tarjeta)
+  // Datafono — obligatorio si hubo ventas en tarjeta
   const inpDf=document.getElementById('datFonoInput');
+  if(tcSistema>0&&(!inpDf||inpDf.value==='')){
+    toast('Ingresá el monto del datafono para continuar');if(inpDf)inpDf.focus();return;
+  }
   const datFono=(inpDf&&inpDf.value!=='')?Math.round(parseFloat(inpDf.value)||0):null;
   const diferenciaTarjeta=datFono!=null?datFono-Math.round(tcSistema):null;
   const old=document.getElementById('conteoCajaModal');if(old)old.remove();
@@ -3187,10 +3538,9 @@ function _showResultadoCierreModal(c,turnoNum,esFinDia){
   const difTcColor=difTc===0?'#1E40AF':difTc>0?'#92400E':'#991B1B';
   const difTcBg=difTc===0?'#DBEAFE':difTc>0?'#FFF8E1':'#FFF1F0';
   const difTcLabel=difTc===0?'✓ CUADRA CON EL SISTEMA':difTc>0?'DATAFONO TIENE MÁS: +'+fmt(difTc):'FALTA EN DATAFONO: '+fmt(Math.abs(difTc));
-  const nextLabel=esFinDia?'🌙 Finalizar día':'▶ Iniciar Turno 2';
-  const nextAction=esFinDia
-    ?'document.getElementById(\'resultadoCierreModal\').remove();toast(\'✅ Día finalizado. ¡Hasta mañana! 🌙\');setTimeout(doLogout,1200)'
-    :'document.getElementById(\'resultadoCierreModal\').remove();localStorage.removeItem(\'rpos_cajaPedida\');showCajaInicialModal(true)';
+  const siguienteTurno=turnoNum+1;
+  const nextActionTurno='document.getElementById(\'resultadoCierreModal\').remove();localStorage.removeItem(\'rpos_cajaPedida\');showCajaInicialModal(true)';
+  const nextActionFin='document.getElementById(\'resultadoCierreModal\').remove();toast(\'✅ Día finalizado. ¡Hasta mañana! 🌙\');setTimeout(doLogout,1200)';
   const div=document.createElement('div');
   div.id='resultadoCierreModal';
   div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px';
@@ -3262,7 +3612,8 @@ function _showResultadoCierreModal(c,turnoNum,esFinDia){
         '</div>';
       })()+
       '<button onclick="printCierreReport(cierres['+cIdx+'])" style="width:100%;padding:12px;border-radius:10px;border:1px solid #ccc;background:#f5f5f0;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">🖨 Imprimir cierre Turno '+turnoNum+'</button>'+
-      '<button onclick="'+nextAction+'" style="width:100%;padding:14px;border-radius:10px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">'+nextLabel+'</button>'+
+      '<button onclick="'+nextActionTurno+'" style="width:100%;padding:13px;border-radius:10px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px">▶ Iniciar Turno '+siguienteTurno+'</button>'+
+      '<button onclick="'+nextActionFin+'" style="width:100%;padding:11px;border-radius:10px;border:1px solid #999;background:#f5f5f0;color:#555;font-size:14px;font-weight:700;cursor:pointer">🌙 Finalizar día</button>'+
     '</div>';
   document.body.appendChild(div);
 }
@@ -3366,25 +3717,22 @@ function calcMetodos(ventasList){
 }
 function showCajaInicialModal(afterCierre){
   const old=document.getElementById("cajaInicialModal");if(old)old.remove();
-  // Marcar que ya se mostró la caja para este período (evita re-preguntar en recargas)
-  localStorage.setItem('rpos_cajaPedida',localISO());
+  // NO marcar cajaPedida aquí — solo se marca cuando el usuario confirma en guardarCajaInicial
   const div=document.createElement("div");div.id="cajaInicialModal";
-  div.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px";
+  div.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px";
+  div.onclick=function(e){if(e.target===div)e.stopPropagation();} // bloquear cierre al hacer clic afuera
   const titulo=afterCierre?"&#128176; Caja para el nuevo periodo":"&#128176; Caja inicial del dia";
   const subtitulo=afterCierre?"&#191;Cu&#225;nto efectivo dej&#225;s en caja para el nuevo periodo?":"&#191;Cu&#225;nto efectivo hay en caja para vueltos hoy?";
   div.innerHTML=`<div style="background:#fff;border-radius:14px;padding:28px;max-width:360px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.3)">
     <div style="font-size:18px;font-weight:700;color:#111;margin-bottom:6px">${titulo}</div>
-    <div style="font-size:13px;color:#666;margin-bottom:20px">${subtitulo}</div>
+    <div style="font-size:13px;color:#666;margin-bottom:4px">${subtitulo}</div>
+    <div style="font-size:12px;color:#E24B4A;font-weight:600;margin-bottom:16px">⚠️ Obligatorio — no se puede omitir</div>
     <input type="number" id="cajaInicialInput" min="0" inputmode="decimal" placeholder="Ej: 100000"
       value="${cajainicial||''}"
       style="width:100%;border:2px solid #1D9E75;border-radius:10px;padding:14px;font-size:20px;text-align:center;font-weight:700;color:#085041;outline:none;box-sizing:border-box;margin-bottom:6px">
     <div style="font-size:11px;color:#999;text-align:center;margin-bottom:20px">Este monto es el efectivo disponible para dar vueltos</div>
-    <div style="display:flex;gap:10px">
-      <button onclick="document.getElementById('cajaInicialModal').remove()"
-        style="flex:1;padding:12px;border-radius:8px;border:1px solid #ddd;background:#f5f5f0;font-size:14px;cursor:pointer">Omitir</button>
-      <button onclick="guardarCajaInicial(${afterCierre?'true':'false'})"
-        style="flex:2;padding:12px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">&#10003; Confirmar</button>
-    </div>
+    <button onclick="guardarCajaInicial(${afterCierre?'true':'false'})"
+      style="width:100%;padding:14px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer">&#10003; Confirmar caja inicial</button>
   </div>`;
   document.body.appendChild(div);
   setTimeout(()=>{const inp=document.getElementById('cajaInicialInput');if(inp)inp.focus();},100);
@@ -3399,6 +3747,7 @@ function guardarCajaInicial(afterCierre){
   }
   cajainicial=val;
   saveLS();
+  localStorage.setItem('rpos_cajaPedida',localISO()); // marcar aquí, solo cuando se confirmó
   document.getElementById("cajaInicialModal").remove();
   if(afterCierre){
     // NO cerrar sesión — seguir trabajando en el nuevo periodo
@@ -3457,29 +3806,38 @@ function renderMenuAdmin(){
     const realIdx=menu.indexOf(i);
     const drag=canDrag?` draggable="true" data-dnd-arr="menu" data-dnd-idx="${realIdx}" ondragstart="dndStart(event,'menu',${realIdx})" ondragover="dndOver(event)" ondragenter="dndEnter(event)" ondragleave="dndLeave(event)" ondrop="dndDrop(event,'menu',${realIdx})" ondragend="dndEnd(event)"`:'';
     const handle=canDrag?`<span class="dnd-handle" title="Arrastrar para reordenar" style="touch-action:none;padding:10px 8px;cursor:grab;font-size:16px" ontouchstart="_tDndStart(event,'menu',${realIdx})">⠿</span>`:'';
-    return`<div class="item-edit-row" id="itemrow-${i.id}"${drag}>${handle}<span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-blue" onclick="startEditItem(${i.id})">✎ Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`;
+    return`<div class="item-edit-row" id="itemrow-${i.id}"${drag}>${handle}<span style="font-size:18px;min-width:26px">${i.emoji}</span><span style="flex:1;font-size:13px;color:#111;font-weight:500">${i.name}${i.extras&&i.extras.length?' <span title="Adicionales que se preguntan" style="font-size:10px;background:#FAEEDA;color:#633806;border-radius:4px;padding:1px 5px">➕'+i.extras.length+'</span>':''}${i.conBebida?' <span title="Incluye bebida" style="font-size:11px">🥤</span>':''}${i.esBebidaIncluible?' <span title="Bebida incluible" style="font-size:10px;background:#DCFCE7;color:#166534;border-radius:4px;padding:1px 5px">incluible</span>':''}</span><span style="font-size:12px;color:#666;min-width:80px">${i.cat}</span><span style="font-size:13px;color:#666;min-width:65px;text-align:right">${fmt(i.price)}</span><button class="btn-sec" style="width:auto;padding:6px 10px;font-size:12px;${(i.opciones&&i.opciones.length)||(i.extras&&i.extras.length)?'border-color:#8B5CF6;color:#5B21B6;background:#F3E8FF':''}" onclick="abrirEditorOpciones(${i.id})">⚙ Opciones</button><button class="btn-blue" onclick="startEditItem(${i.id})">✎ Editar</button><button class="btn-red" onclick="delMenuItem(${i.id})">&times; Borrar</button></div>`;
   }).join(''))||`<div class="empty">No hay platillos en esta categoría</div>`;
   if(!canDrag&&filtered.length)list.innerHTML+='<div style="font-size:11px;color:#aaa;padding:6px 4px">Selecciona "Todas" para poder reordenar arrastrando</div>';
 }
 function setMenuAdminFiltro(cat){menuAdminCatFiltro=cat;renderMenuAdmin();}
 function startEditItem(id){
   const item=menu.find(i=>i.id===id);if(!item)return;const row=document.getElementById("itemrow-"+id);if(!row)return;
-  row.innerHTML=`<input class="edit-mini" style="width:40px" value="${item.emoji}" id="ei-em-${id}"><input class="edit-mini" style="flex:1;min-width:120px" value="${item.name}" id="ei-nm-${id}"><select class="edit-mini" id="ei-cat-${id}">${cats.map(c=>`<option${c===item.cat?" selected":""}>${c}</option>`).join("")}</select><input class="edit-mini" style="width:90px" type="number" value="${item.price}" id="ei-pr-${id}"><button class="btn-green" onclick="saveEditItem(${id})">\u2713 Guardar</button><button class="btn-sec" style="width:auto;padding:6px 10px" onclick="renderMenuAdmin()">Cancelar</button>`;
+  row.innerHTML=`<input class="edit-mini" style="width:40px" value="${item.emoji}" id="ei-em-${id}"><input class="edit-mini" style="flex:1;min-width:120px" value="${item.name}" id="ei-nm-${id}"><select class="edit-mini" id="ei-cat-${id}">${cats.map(c=>`<option${c===item.cat?" selected":""}>${c}</option>`).join("")}</select><input class="edit-mini" style="width:90px" type="number" value="${item.price}" id="ei-pr-${id}"><label style="font-size:11px;color:#555;white-space:nowrap;cursor:pointer"><input type="checkbox" id="ei-cb-${id}" ${item.conBebida?'checked':''}> Incluye bebida</label><label style="font-size:11px;color:#555;white-space:nowrap;cursor:pointer"><input type="checkbox" id="ei-bi-${id}" ${item.esBebidaIncluible?'checked':''}> Es bebida incluible</label><button class="btn-green" onclick="saveEditItem(${id})">\u2713 Guardar</button><button class="btn-sec" style="width:auto;padding:6px 10px" onclick="renderMenuAdmin()">Cancelar</button>`;
 }
 function saveEditItem(id){
   const item=menu.find(i=>i.id===id);if(!item)return;
   const nm=document.getElementById("ei-nm-"+id).value.trim();const pr=parseInt(document.getElementById("ei-pr-"+id).value);const em=document.getElementById("ei-em-"+id).value.trim()||"\uD83C\uDF7D";const cat=document.getElementById("ei-cat-"+id).value;
   if(!nm||!pr){toast("Completa todos los campos");return;}
-  item.name=nm;item.price=pr;item.emoji=em;item.cat=cat;saveLS();renderMenuAdmin();toast("Platillo actualizado");
+  const cbEl=document.getElementById("ei-cb-"+id);const biEl=document.getElementById("ei-bi-"+id);
+  item.name=nm;item.price=pr;item.emoji=em;item.cat=cat;
+  if(cbEl)item.conBebida=cbEl.checked;else delete item.conBebida;
+  if(biEl)item.esBebidaIncluible=biEl.checked;else delete item.esBebidaIncluible;
+  saveLS();renderMenuAdmin();_programarEnvioMenu();toast("Platillo actualizado");
 }
 function addMenuItem(){
   const nm=document.getElementById("maNm").value.trim();const pr=parseInt(document.getElementById("maPr").value);const em=document.getElementById("maEm").value.trim()||"\uD83C\uDF7D";const cat=document.getElementById("maCat").value;
   if(!nm||!pr){toast("Completa nombre y precio");return;}
-  menu.push({id:nextMid++,name:nm,price:pr,cat,emoji:em});
+  const cb=document.getElementById("maCb");const bi=document.getElementById("maBi");
+  const newItem={id:nextMid++,name:nm,price:pr,cat,emoji:em};
+  if(cb&&cb.checked)newItem.conBebida=true;
+  if(bi&&bi.checked)newItem.esBebidaIncluible=true;
+  menu.push(newItem);
   document.getElementById("maNm").value="";document.getElementById("maPr").value="";document.getElementById("maEm").value="";
-  saveLS();renderMenuAdmin();toast("\u2713 Platillo agregado");
+  if(cb)cb.checked=false;if(bi)bi.checked=false;
+  saveLS();renderMenuAdmin();_programarEnvioMenu();toast("\u2713 Platillo agregado");
 }
-function delMenuItem(id){if(!confirm("Eliminar este platillo del menu?"))return;menu=menu.filter(i=>i.id!==id);saveLS();renderMenuAdmin();}
+function delMenuItem(id){if(!confirm("Eliminar este platillo del menu?"))return;menu=menu.filter(i=>i.id!==id);saveLS();renderMenuAdmin();_programarEnvioMenu();}
 function renderCatAdmin(){
   const list=document.getElementById("catList");if(!list)return;
   if(!cats.length){list.innerHTML=`<div class="empty">No hay categorias</div>`;return;}
@@ -4020,21 +4378,61 @@ function eliminarMesaAdmin(idx){
 function enviarACocina(){
   const ord=orders[activeMesa];
   if(!ord||!ord.items.length)return;
+
+  if(TABLET_MODE){
+    // Solo enviar items nuevos (que no se hayan enviado aún)
+    const itemsNuevos=ord.items.map(function(it){
+      const ya=it.sentQty||0;const nuevo=it.qty-ya;
+      return nuevo>0?{name:it.name,price:it.price,qty:nuevo,nota:it.nota||'',sub:!!it.sub}:null;
+    }).filter(Boolean);
+    if(!itemsNuevos.length){toast('Todo ya fue enviado a cocina');return;}
+    const topic=_getTabletTopic();
+    if(!topic){toast('⚠️ Canal no configurado — contactá al administrador');return;}
+    const esAdicion=ord.enviado===true;
+    // Marcar como enviados
+    ord.items.forEach(function(it){it.sentQty=it.qty;});
+    ord.enviado=true;saveLS();
+    // Enviar via ntfy
+    const mesero=activeUser?activeUser.name:'Mesero';
+    const total=itemsNuevos.reduce(function(a,i){return a+i.price*i.qty;},0);
+    const lineas=itemsNuevos.map(function(i){return i.qty+'x '+i.name+(i.nota?' ('+i.nota+')':'');}).join('\n');
+    const payload=JSON.stringify({type:esAdicion?'adicion':'pedido',mesa:activeMesa,mesero:mesero,ts:Date.now(),items:itemsNuevos,total:total});
+    const body=lineas+'\n||'+payload;
+    const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1';
+    fetch(url,{method:'POST',body:body}).catch(function(){
+      _tabletSendQueue.push({url:url,body:body,ts:Date.now(),mesa:activeMesa});_guardarColaNtfy();
+      toast('📡 Sin internet — se enviará cuando regrese la conexión');
+    });
+    toast(esAdicion?'➕ Adición enviada':'✅ Pedido enviado a cocina');
+    // Cerrar modal pero MANTENER la orden (mesero puede ver qué pidió la mesa)
+    const modal=document.getElementById('mesaModal');if(modal)modal.remove();
+    activeMesa=null;menuBusqueda='';renderSalon();
+    return;
+  }
+
+  // Compu principal: comportamiento original
   imprimirComanda(activeMesa,ord);
   _enviarPedidoNtfy(activeMesa,ord);
   toast('✅ Comanda enviada a cocina');
   closeMesa();
 }
-let _tabletSendQueue=[];  // pedidos pendientes de enviar cuando regrese internet
+// Pedidos pendientes de enviar cuando regrese internet (se guardan para no perderlos si la página se recarga)
+let _tabletSendQueue=(function(){try{return JSON.parse(localStorage.getItem('rpos_ntfyQueue')||'[]')||[];}catch(e){return[];}})();
+function _guardarColaNtfy(){try{localStorage.setItem('rpos_ntfyQueue',JSON.stringify(_tabletSendQueue));}catch(e){}}
 
+function _enviarCierreMesaNtfy(mesaNombre){
+  const topic=_getTabletTopic();if(!topic)return;
+  const payload=JSON.stringify({type:'cierre_mesa',mesa:mesaNombre,ts:Date.now()});
+  fetch('https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1',{method:'POST',body:'cierre|'+mesaNombre+'\n||'+payload}).catch(function(){});
+}
 function _enviarPedidoNtfy(mesaNombre,ord){
-  const topic=(ticketConfig.tabletTopic||'').trim();
+  const topic=_getTabletTopic();
   if(!topic)return;
   const mesero=activeUser?activeUser.name:'Mesero';
   const total=ord.items.reduce(function(a,i){return a+i.price*i.qty;},0);
   const lineas=ord.items.map(function(i){return i.qty+'x '+i.name+(i.nota?' ('+i.nota+')':'');}).join('\n');
   const payload=JSON.stringify({
-    type:'pedido',mesa:mesaNombre,mesero:mesero,ts:Date.now(),
+    type:'pedido',origen:'compu',mesa:mesaNombre,mesero:mesero,ts:Date.now(),
     items:ord.items.map(function(i){return{name:i.name,qty:i.qty,price:i.price,nota:i.nota||''};})
     ,total:total
   });
@@ -4042,36 +4440,44 @@ function _enviarPedidoNtfy(mesaNombre,ord){
   const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1';
   fetch(url,{method:'POST',body:body}).catch(function(){
     // Sin internet: guardar en cola y reintentar cuando vuelva la conexión
-    _tabletSendQueue.push({url:url,body:body,ts:Date.now(),mesa:mesaNombre});
+    _tabletSendQueue.push({url:url,body:body,ts:Date.now(),mesa:mesaNombre});_guardarColaNtfy();
     toast('📡 Sin internet — el pedido se guardó y se enviará cuando regrese la conexión');
   });
 }
 // Cuando se pierde el internet: pausar SSE/polling sin afectar nada del POS
+function _mostrarAvisoOffline(on){
+  let b=document.getElementById('offlineBadge');
+  if(on){
+    if(!b){b=document.createElement('div');b.id='offlineBadge';b.style.cssText='position:fixed;bottom:8px;right:8px;z-index:9998;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;font:600 12px system-ui,sans-serif;padding:5px 12px;border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.12);pointer-events:none';b.textContent='📡 Sin internet — podés seguir cobrando normal';document.body.appendChild(b);}
+  }else if(b){b.remove();}
+}
 window.addEventListener('offline',function(){
   _detenerPollTablet(); // cierra SSE y polling para no generar errores en consola
+  _mostrarAvisoOffline(true);
   toast('📡 Sin internet — el sistema sigue funcionando con normalidad');
 });
 // Cuando regresa el internet: reanudar sync y reenviar cola pendiente
 window.addEventListener('online',function(){
-  // Reiniciar sync tablet si aplica
-  if(!TABLET_MODE&&(ticketConfig.tabletTopic||'').trim()){
+  _mostrarAvisoOffline(false);
+  // Reiniciar sync (compu recibe pedidos, tablet recibe cierres de mesa)
+  if(activeUser&&_getTabletTopic()){
     setTimeout(_iniciarPollTablet,1000); // pequeño delay para que la red estabilice
   }
-  // Reenviar pedidos en cola
-  if(!_tabletSendQueue.length){
-    toast('✅ Internet restaurado');
-    return;
-  }
+  if(!_tabletSendQueue.length){toast('✅ Internet restaurado');return;}
   toast('📡 Internet restaurado — reenviando '+_tabletSendQueue.length+' pedido(s) pendiente(s)...');
+  _reenviarColaNtfy();
+});
+function _reenviarColaNtfy(){
+  if(!_tabletSendQueue.length)return;
   const cola=[..._tabletSendQueue];
-  _tabletSendQueue=[];
+  _tabletSendQueue=[];_guardarColaNtfy();
   cola.forEach(function(item){
     if(Date.now()-item.ts>3600000)return; // descartar si tiene más de 1 hora
     fetch(item.url,{method:'POST',body:item.body}).catch(function(){
-      _tabletSendQueue.push(item); // si falla de nuevo, volver a la cola
+      _tabletSendQueue.push(item);_guardarColaNtfy(); // si falla de nuevo, volver a la cola
     });
   });
-});
+}
 function probarNotifTablet(){
   const topic=(document.getElementById('tc-tablet-topic')?.value||ticketConfig.tabletTopic||'').trim();
   if(!topic){toast('Primero ingresá el tema tablet y guardá');return;}
@@ -4083,10 +4489,14 @@ function probarNotifTablet(){
     .catch(function(){toast('Sin conexión a internet — ntfy.sh no disponible');});
 }
 /* ── SYNC PEDIDOS TABLET → COMPU PRINCIPAL (SSE en tiempo real) ── */
+function _getTabletTopic(){
+  // Tablet: topic viene del parámetro ?topic=XXX en la URL
+  if(TABLET_MODE){const p=new URLSearchParams(window.location.search).get('topic');if(p&&p.trim())return p.trim();}
+  return(ticketConfig.tabletTopic||'').trim();
+}
 function _iniciarPollTablet(){
-  if(TABLET_MODE)return;
   _detenerPollTablet();
-  const topic=(ticketConfig.tabletTopic||'').trim();
+  const topic=_getTabletTopic();
   if(!topic)return;
   // Primero: polling de los últimos 5 min para recuperar pedidos recientes
   _pollTabletFallback(300);
@@ -4115,7 +4525,7 @@ function _detenerPollTablet(){
   if(_tabletPollInterval){clearInterval(_tabletPollInterval);_tabletPollInterval=null;}
 }
 function _pollTabletFallback(segundosAtras){
-  const topic=(ticketConfig.tabletTopic||'').trim();
+  const topic=_getTabletTopic();
   if(!topic)return;
   const since=Math.floor(Date.now()/1000)-(segundosAtras||60);
   fetch('https://ntfy.sh/'+encodeURIComponent(topic)+'/json?poll=1&since='+since)
@@ -4133,28 +4543,54 @@ function _procesarMensajeTablet(msg){
   const body=msg.message||'';
   const sep=body.indexOf('\n||');
   if(sep<0)return;
-  let pedido;try{pedido=JSON.parse(body.slice(sep+3));}catch(e){return;}
-  if(pedido.type!=='pedido')return;
-  // Dedup: ignorar si ya procesamos este pedido (mismo ts + mesa)
-  const key=pedido.ts+'|'+pedido.mesa;
+  let data;try{data=JSON.parse(body.slice(sep+3));}catch(e){return;}
+
+  // ── Sync de menú ──
+  if(data.type==='menu_part'){_recibirParteMenu(data);return;}
+  if(data.type==='menu_req'){
+    if(!TABLET_MODE&&data.ts>Date.now()-60000&&Date.now()-_menuReqResp>10000){_menuReqResp=Date.now();_enviarMenuTablet(true);}
+    return;
+  }
+
+  // ── TABLET recibe: mesa cobrada → limpiar orden local ──
+  if(data.type==='cierre_mesa'){
+    if(!TABLET_MODE)return; // solo la tablet procesa esto
+    if(orders[data.mesa]){delete orders[data.mesa];saveLS();}
+    renderSalon();
+    toast('✅ '+data.mesa+' cobrada — mesa liberada');
+    return;
+  }
+
+  // ── COMPU PRINCIPAL recibe: pedido o adición desde tablet ──
+  if(TABLET_MODE)return; // tablet no procesa sus propios pedidos
+  if(data.type!=='pedido'&&data.type!=='adicion')return;
+  if(data.origen==='compu')return; // pedido enviado por esta misma compu
+  // Dedup: ignorar si ya procesamos este mensaje (mismo ts + mesa)
+  const key=data.ts+'|'+data.mesa;
   if(_tabletPedidosVistos.has(key))return;
   _tabletPedidosVistos.add(key);
   // Buscar la mesa en el salon
-  const mesaObj=mesas.find(function(m){return m.nombre===pedido.mesa;});
-  if(!mesaObj){toast('📲 Pedido de tablet: mesa "'+pedido.mesa+'" no encontrada en el salón');return;}
-  // Agregar los items automáticamente a la orden de esa mesa
-  if(!orders[pedido.mesa]){orders[pedido.mesa]={items:[],payMethod:null};}
-  pedido.items.forEach(function(pi){
-    const ex=orders[pedido.mesa].items.find(function(o){return o.name===pi.name&&o.price===pi.price;});
-    if(ex){ex.qty+=pi.qty;}
-    else{orders[pedido.mesa].items.push({id:Date.now()+Math.random(),name:pi.name,price:pi.price,qty:pi.qty,nota:pi.nota||''});}
+  const mesaObj=mesas.find(function(m){return m.nombre===data.mesa;});
+  if(!mesaObj){toast('📲 Pedido tablet: mesa "'+data.mesa+'" no existe en el salón');return;}
+  // Agregar items a la orden de esa mesa
+  if(!orders[data.mesa]){orders[data.mesa]={items:[]};}
+  let _ultPadre=null;
+  data.items.forEach(function(pi,k){
+    const sigEsSub=data.items[k+1]&&data.items[k+1].sub;
+    // Platillos con extras/bebida o sub-líneas: siempre línea nueva para mantenerlos juntos
+    const ex=(!pi.sub&&!sigEsSub)?orders[data.mesa].items.find(function(o){return!o.sub&&o.name===pi.name&&o.price===pi.price&&!(o.nota||'')&&!(pi.nota||'');}):null;
+    if(ex){ex.qty+=pi.qty;_ultPadre=ex.id;return;}
+    const nid=_lineId();
+    const linea={id:nid,name:pi.name,price:pi.price,qty:pi.qty,nota:pi.nota||''};
+    if(pi.sub){linea.sub=true;if(_ultPadre)linea.parent=_ultPadre;}else{_ultPadre=nid;}
+    orders[data.mesa].items.push(linea);
   });
   saveLS();
   renderSalon();
-  // Si la mesa está abierta en este momento, refrescar el modal también
-  if(activeMesa===pedido.mesa)renderMesaModal();
-  const totalItems=pedido.items.reduce(function(a,i){return a+i.qty;},0);
-  toast('📲 '+pedido.mesa+': '+totalItems+' platillo'+(totalItems!==1?'s':'')+' agregado'+(totalItems!==1?'s':'')+' desde tablet ('+pedido.mesero+')');
+  if(activeMesa===data.mesa)renderMesaModal();
+  const totalItems=data.items.reduce(function(a,i){return a+i.qty;},0);
+  const esAdicion=data.type==='adicion';
+  toast('📲 '+(esAdicion?'➕ Adición':'🆕 Pedido')+' — '+data.mesa+': '+totalItems+' platillo'+(totalItems!==1?'s':'')+' ('+data.mesero+')');
 }
 
 function imprimirComanda(mesa,ord){
@@ -4168,8 +4604,8 @@ function buildComandaHTML(mesa,ord){
   const hora=new Date().toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});
   const fecha=new Date().toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const emp=activeUser?activeUser.name:'';
-  const rows=ord.items.map(i=>`<tr><td style="font-size:22px;font-weight:900;padding:4px 0;width:36px;vertical-align:top">${i.qty}x</td><td style="font-size:15px;font-weight:700;padding:4px 4px;line-height:1.3">${i.name}${i.nota?`<div style="font-size:13px;font-weight:500;font-style:italic;color:#333;margin-top:2px">&#8594; ${i.nota}</div>`:''}</td></tr>`).join('');
-  const total=ord.items.reduce((a,i)=>a+i.qty,0);
+  const rows=ord.items.map(i=>i.sub?`<tr><td></td><td style="font-size:14px;font-weight:600;padding:0 4px 4px 10px;line-height:1.3">${i.qty>1?i.qty+'x ':''}${i.name.replace(/^↳ /,'+ ')}</td></tr>`:`<tr><td style="font-size:22px;font-weight:900;padding:4px 0;width:36px;vertical-align:top">${i.qty}x</td><td style="font-size:15px;font-weight:700;padding:4px 4px;line-height:1.3">${i.name}${i.nota?`<div style="font-size:13px;font-weight:500;font-style:italic;color:#333;margin-top:2px">&#8594; ${i.nota}</div>`:''}</td></tr>`).join('');
+  const total=ord.items.filter(i=>!i.sub).reduce((a,i)=>a+i.qty,0);
   return`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
     @page{margin:2mm;size:80mm auto}
     body{font-family:'Courier New',monospace;width:74mm;margin:2mm;padding:0;font-size:13px}
@@ -4268,6 +4704,10 @@ try{
   });
 })();
 loadLS();
+if(!navigator.onLine)_mostrarAvisoOffline(true);
+else if(_tabletSendQueue.length)setTimeout(_reenviarColaNtfy,3000);
+_migrarOpcionesV1();
+_migrarExtrasV2();
 _initArchivoHistorial(); // iniciar archivo histórico en IndexedDB (después de loadLS para migrar datos existentes)
 ALL_SCREENS.forEach(s=>{const b=document.getElementById("nav-"+s);if(b)b.style.display="none";});
 if(TABLET_MODE){

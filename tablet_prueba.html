@@ -434,6 +434,10 @@ body{background:#f5f5f0;min-height:100vh;overflow-x:hidden}
 /* COPIA DE PRUEBA: datos separados del sistema real (claves PRUEBA_) */
 const _lsP={getItem:function(k){return localStorage.getItem('PRUEBA_'+k);},setItem:function(k,v){localStorage.setItem('PRUEBA_'+k,v);},removeItem:function(k){localStorage.removeItem('PRUEBA_'+k);}};
 (function(){var b=document.createElement('div');b.textContent='MODO PRUEBA';b.style.cssText='position:fixed;bottom:6px;left:6px;z-index:9999;background:#E24B4A;color:#fff;font:700 11px sans-serif;padding:3px 9px;border-radius:10px;pointer-events:none;opacity:.85';document.body.appendChild(b);})();
+/* ── MODO SIN INTERNET: guardar copia del sistema en la compu (service worker) ── */
+if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(function(){});}
+// Si no hay internet y todavía no hay copia guardada, avisar antes de recargar/cerrar la página
+window.addEventListener('beforeunload',function(e){if(location.protocol==='https:'&&!navigator.onLine&&!(navigator.serviceWorker&&navigator.serviceWorker.controller)){e.preventDefault();e.returnValue='';}});
 const ALL_SCREENS=["salon","ventas","gastos","cierre","menu-admin","usuarios"];
 
 /* ── TABLET MODE ── */
@@ -4399,7 +4403,7 @@ function enviarACocina(){
     const body=lineas+'\n||'+payload;
     const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1';
     fetch(url,{method:'POST',body:body}).catch(function(){
-      _tabletSendQueue.push({url:url,body:body,ts:Date.now(),mesa:activeMesa});
+      _tabletSendQueue.push({url:url,body:body,ts:Date.now(),mesa:activeMesa});_guardarColaNtfy();
       toast('📡 Sin internet — se enviará cuando regrese la conexión');
     });
     toast(esAdicion?'➕ Adición enviada':'✅ Pedido enviado a cocina');
@@ -4415,7 +4419,9 @@ function enviarACocina(){
   toast('✅ Comanda enviada a cocina');
   closeMesa();
 }
-let _tabletSendQueue=[];  // pedidos pendientes de enviar cuando regrese internet
+// Pedidos pendientes de enviar cuando regrese internet (se guardan para no perderlos si la página se recarga)
+let _tabletSendQueue=(function(){try{return JSON.parse(_lsP.getItem('rpos_ntfyQueue')||'[]')||[];}catch(e){return[];}})();
+function _guardarColaNtfy(){try{_lsP.setItem('rpos_ntfyQueue',JSON.stringify(_tabletSendQueue));}catch(e){}}
 
 function _enviarCierreMesaNtfy(mesaNombre){
   const topic=_getTabletTopic();if(!topic)return;
@@ -4437,36 +4443,44 @@ function _enviarPedidoNtfy(mesaNombre,ord){
   const url='https://ntfy.sh/'+encodeURIComponent(topic)+'?priority=1';
   fetch(url,{method:'POST',body:body}).catch(function(){
     // Sin internet: guardar en cola y reintentar cuando vuelva la conexión
-    _tabletSendQueue.push({url:url,body:body,ts:Date.now(),mesa:mesaNombre});
+    _tabletSendQueue.push({url:url,body:body,ts:Date.now(),mesa:mesaNombre});_guardarColaNtfy();
     toast('📡 Sin internet — el pedido se guardó y se enviará cuando regrese la conexión');
   });
 }
 // Cuando se pierde el internet: pausar SSE/polling sin afectar nada del POS
+function _mostrarAvisoOffline(on){
+  let b=document.getElementById('offlineBadge');
+  if(on){
+    if(!b){b=document.createElement('div');b.id='offlineBadge';b.style.cssText='position:fixed;bottom:8px;right:8px;z-index:9998;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;font:600 12px system-ui,sans-serif;padding:5px 12px;border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.12);pointer-events:none';b.textContent='📡 Sin internet — podés seguir cobrando normal';document.body.appendChild(b);}
+  }else if(b){b.remove();}
+}
 window.addEventListener('offline',function(){
   _detenerPollTablet(); // cierra SSE y polling para no generar errores en consola
+  _mostrarAvisoOffline(true);
   toast('📡 Sin internet — el sistema sigue funcionando con normalidad');
 });
 // Cuando regresa el internet: reanudar sync y reenviar cola pendiente
 window.addEventListener('online',function(){
-  // Reiniciar sync tablet si aplica
-  if(!TABLET_MODE&&(ticketConfig.tabletTopic||'').trim()){
+  _mostrarAvisoOffline(false);
+  // Reiniciar sync (compu recibe pedidos, tablet recibe cierres de mesa)
+  if(activeUser&&_getTabletTopic()){
     setTimeout(_iniciarPollTablet,1000); // pequeño delay para que la red estabilice
   }
-  // Reenviar pedidos en cola
-  if(!_tabletSendQueue.length){
-    toast('✅ Internet restaurado');
-    return;
-  }
+  if(!_tabletSendQueue.length){toast('✅ Internet restaurado');return;}
   toast('📡 Internet restaurado — reenviando '+_tabletSendQueue.length+' pedido(s) pendiente(s)...');
+  _reenviarColaNtfy();
+});
+function _reenviarColaNtfy(){
+  if(!_tabletSendQueue.length)return;
   const cola=[..._tabletSendQueue];
-  _tabletSendQueue=[];
+  _tabletSendQueue=[];_guardarColaNtfy();
   cola.forEach(function(item){
     if(Date.now()-item.ts>3600000)return; // descartar si tiene más de 1 hora
     fetch(item.url,{method:'POST',body:item.body}).catch(function(){
-      _tabletSendQueue.push(item); // si falla de nuevo, volver a la cola
+      _tabletSendQueue.push(item);_guardarColaNtfy(); // si falla de nuevo, volver a la cola
     });
   });
-});
+}
 function probarNotifTablet(){
   const topic=(document.getElementById('tc-tablet-topic')?.value||ticketConfig.tabletTopic||'').trim();
   if(!topic){toast('Primero ingresá el tema tablet y guardá');return;}
@@ -4693,6 +4707,8 @@ try{
   });
 })();
 loadLS();
+if(!navigator.onLine)_mostrarAvisoOffline(true);
+else if(_tabletSendQueue.length)setTimeout(_reenviarColaNtfy,3000);
 _migrarOpcionesV1();
 _migrarExtrasV2();
 _initArchivoHistorial(); // iniciar archivo histórico en IndexedDB (después de loadLS para migrar datos existentes)
